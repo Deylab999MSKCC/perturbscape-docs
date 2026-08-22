@@ -1,0 +1,183 @@
+{
+ "datasets": {
+  "HepG2": {
+   "contexts": [
+    "HepG2"
+   ],
+   "traits": [
+    "Alanine aminotransferase",
+    "Alkaline phosphatase",
+    "Aspartate aminotransferase",
+    "Cholesterol",
+    "Gamma glutamyltransferase",
+    "HDL cholesterol",
+    "LDL direct",
+    "Lipoprotein A",
+    "Total bilirubin",
+    "Triglycerides"
+   ],
+   "n_perturbations": 257
+  },
+  "Jurkat": {
+   "contexts": [
+    "Jurkat"
+   ],
+   "traits": [
+    "All auto-immune",
+    "Allergy eczema diagnosed",
+    "Alzheimers",
+    "Asthma diagnosed",
+    "Celiac",
+    "Crohn's disease",
+    "Eosinophil count",
+    "Hypothyroidism self rep.",
+    "IBD",
+    "Lupus",
+    "Lymphocyte count",
+    "Mean Corpuscular Hemoglobin",
+    "Mean platelet vol.",
+    "Monocyte count",
+    "Multiple sclerosis",
+    "Platelet count",
+    "Primary biliary cirrhosis",
+    "Psoriasis",
+    "Red count",
+    "Rheumatoid arthritis",
+    "Type 1 diabetes",
+    "Ulcerative colitis",
+    "White count"
+   ],
+   "n_perturbations": 186
+  },
+  "K562-GWPS": {
+   "contexts": [
+    "K562-GWPS"
+   ],
+   "traits": [
+    "Mean Corpuscular Hemoglobin",
+    "Red Blood Cell Count"
+   ],
+   "n_perturbations": 7969
+  },
+  "Monocytes": {
+   "contexts": [
+    "Monocytes KD",
+    "Monocytes KO"
+   ],
+   "traits": [
+    "All auto-immune",
+    "Allergy eczema diagnosed",
+    "Alzheimers",
+    "Asthma diagnosed",
+    "Celiac",
+    "Crohn's disease",
+    "Eosinophil count",
+    "Hypothyroidism self rep.",
+    "IBD",
+    "Lupus",
+    "Lymphocyte count",
+    "Mean Corpuscular Hemoglobin",
+    "Mean platelet vol.",
+    "Monocyte count",
+    "Multiple sclerosis",
+    "Platelet count",
+    "Primary biliary cirrhosis",
+    "Psoriasis",
+    "Red count",
+    "Rheumatoid arthritis",
+    "Type 1 diabetes",
+    "Ulcerative colitis",
+    "White count"
+   ],
+   "n_perturbations": 181
+  },
+  "PerturbAI": {
+   "contexts": [
+    "005_L4-5_IT_CTX_Glut",
+    "052_Pvalb_Gaba",
+    "151_TH_Prkcd_Grin2c_Glut",
+    "155_MB_Glut"
+   ],
+   "traits": [
+    "Autism"
+   ],
+   "n_perturbations": 1858
+  },
+  "T2D": {
+   "contexts": [
+    "D18",
+    "D18 Endo",
+    "D18 Non-endo"
+   ],
+   "traits": [
+    "HbA1C",
+    "Type 2 diabetes"
+   ],
+   "n_perturbations": 32
+  },
+  "TeloHAEC": {
+   "contexts": [
+    "TeloHAEC"
+   ],
+   "traits": [
+    "Coronary Artery Disease",
+    "Diastolic Blood Pressure",
+    "Systolic Blood Pressure"
+   ],
+   "n_perturbations": 580
+  }
+ },
+ "all_traits": [
+  "Alanine aminotransferase",
+  "Alkaline phosphatase",
+  "All auto-immune",
+  "Allergy eczema diagnosed",
+  "Alzheimers",
+  "Aspartate aminotransferase",
+  "Asthma diagnosed",
+  "Autism",
+  "Celiac",
+  "Cholesterol",
+  "Coronary Artery Disease",
+  "Crohn's disease",
+  "Diastolic Blood Pressure",
+  "Eosinophil count",
+  "Gamma glutamyltransferase",
+  "HDL cholesterol",
+  "HbA1C",
+  "Hypothyroidism self rep.",
+  "IBD",
+  "LDL direct",
+  "Lipoprotein A",
+  "Lupus",
+  "Lymphocyte count",
+  "Mean Corpuscular Hemoglobin",
+  "Mean platelet vol.",
+  "Monocyte count",
+  "Multiple sclerosis",
+  "Platelet count",
+  "Primary biliary cirrhosis",
+  "Psoriasis",
+  "Red Blood Cell Count",
+  "Red count",
+  "Rheumatoid arthritis",
+  "Systolic Blood Pressure",
+  "Total bilirubin",
+  "Triglycerides",
+  "Type 1 diabetes",
+  "Type 2 diabetes",
+  "Ulcerative colitis",
+  "White count"
+ ],
+ "totals": {
+  "meta_program_rows": 6919954,
+  "pathway_rows": 38954,
+  "datasets": 7,
+  "traits": 40,
+  "perturbations": 10222
+ },
+ "files": {
+  "meta_programs.parquet": 16623891,
+  "pathways.parquet": 3438923
+ }
+}

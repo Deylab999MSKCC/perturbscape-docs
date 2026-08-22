@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+
+{#
+  The landing page sets `title: PerturbScape` in its front matter so the header
+  reads "PerturbScape" rather than "Home" once the hidden h1 scrolls out of view.
+  Material's default htmltitle block checks front matter before is_homepage,
+  which would render "PerturbScape - PerturbScape" in the browser tab. Check
+  is_homepage first instead.
+#}
+{% block htmltitle %}
+  {% if page.is_homepage %}
+    <title>{{ config.site_name }}</title>
+  {% elif page.meta and page.meta.title %}
+    <title>{{ page.meta.title }} - {{ config.site_name }}</title>
+  {% elif page.title %}
+    <title>{{ page.title }} - {{ config.site_name }}</title>
+  {% else %}
+    <title>{{ config.site_name }}</title>
+  {% endif %}
+{% endblock %}
