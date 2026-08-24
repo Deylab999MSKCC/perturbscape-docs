@@ -61,7 +61,7 @@ docs/
 
 ## The published data
 
-Three Parquet tables in `docs/data/tables/`, built from the per-dataset text
+Four Parquet tables in `docs/data/tables/`, built from the per-dataset text
 files in `processed_data` and the precomputed UMAP coordinates in `umaps`:
 
 | File | Rows | Size |
@@ -69,6 +69,7 @@ files in `processed_data` and the precomputed UMAP coordinates in `umaps`:
 | `pathways.parquet` | 39,142 | 3.5 MB |
 | `meta_programs.parquet` | 3,971,637 | 9.4 MB |
 | `umap.parquet` | 38,791 | 0.7 MB |
+| `genes.parquet` | 15,066 | 0.1 MB |
 
 Roughly 370 MB of source text reduced to under 14 MB, which fits comfortably
 inside GitHub's limits and is served directly from Pages.
@@ -87,9 +88,12 @@ It harmonizes the three schema variants (the leading grouping column is named
 `data`, `subclass`, or `cell` depending on the dataset, and is absent from four
 of them) into a single `context` column, renames `tau`/`pvalue_tau` to
 `trs`/`pvalue`, merges trait names that differ only in capitalization, maps the
-UMAP files onto datasets and contexts, and writes all three tables plus
-`manifest.json`. Every merge and rename it applies is printed, followed by a
-coverage report.
+UMAP files onto datasets and contexts, resolves gene symbols to stable HGNC ids,
+and writes all four tables plus `manifest.json`. Every merge and rename it
+applies is printed, followed by a coverage report.
+
+The HGNC complete set is downloaded once to `.cache/` (gitignored) and reused on
+later runs; pass `--hgnc <path>` to point at your own copy.
 
 Re-run it and commit the result whenever the upstream results change.
 

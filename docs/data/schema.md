@@ -1,6 +1,6 @@
 # Schema and Downloads
 
-The published results are three Parquet tables. Everything the
+The published results are four Parquet tables. Everything the
 [explorer](index.md) shows comes from these files, and they can be queried
 directly without the browser.
 
@@ -11,6 +11,7 @@ directly without the browser.
 | [`pathways.parquet`](tables/pathways.parquet) | 39,142 | 3.5 MB | One row per scored pair: TRS, p-value, enriched pathways |
 | [`meta_programs.parquet`](tables/meta_programs.parquet) | 3,971,637 | 9.4 MB | Top 100 ranked meta-program genes per pair |
 | [`umap.parquet`](tables/umap.parquet) | 38,791 | 0.7 MB | Precomputed UMAP coordinates per pair |
+| [`genes.parquet`](tables/genes.parquet) | 15,066 | 0.1 MB | Gene symbol to HGNC id, for deep-linking |
 | [`manifest.json`](tables/manifest.json) | | small | Dataset, context, and trait inventory |
 
 Under 14 MB in total, harmonized from roughly 370 MB of source text.
@@ -20,7 +21,8 @@ The explorer's **Download all** button produces the same content as
 
 ## The join key
 
-All three tables share the same four-column key:
+`pathways`, `meta_programs` and `umap` share the same four-column key
+(`genes` joins on `gene` instead):
 
 ```
 dataset · context · perturbation · trait
@@ -86,6 +88,26 @@ comparable to each other.
 
 Not every trait has coordinates. 709 UMAP points also have no matching row in
 `pathways.parquet` — the explorer draws these muted and offers no drill-down.
+
+## `genes.parquet`
+
+| Column | Type | Description |
+|---|---|---|
+| `gene` | string | HGNC symbol, matching `meta_programs.gene` |
+| `hgnc_id` | int32 | Numeric HGNC id, null where the symbol could not be resolved |
+
+Kept separate rather than added as a column on `meta_programs.parquet`: 15,066
+distinct symbols against 4M rows, so a join table costs a fraction of the space.
+
+Symbols are resolved against the HGNC complete set, matching current symbols
+first and falling back to previous and alias symbols. 15,061 of 15,066 resolve;
+the five that do not are readthrough transcripts and `LOC` identifiers that HGNC
+does not carry as genes.
+
+!!! note "Why the id rather than the symbol"
+    Linking to `#!/symbol/NCL` fails outright, because HGNC has renamed that
+    gene to NUCLEOLIN. Resolving to `HGNC:7667` once at build time keeps every
+    link working regardless of later nomenclature changes.
 
 ## Querying directly
 
@@ -175,7 +197,7 @@ Not every trait has coordinates. 709 UMAP points also have no matching row in
     ```
 
 !!! tip "Filter before you materialize"
-    All three files are dictionary-encoded and sorted, so predicates on
+    The files are dictionary-encoded and sorted, so predicates on
     `dataset` and `trait` skip most row groups. Pushing filters into the query
     rather than loading the whole table and subsetting afterwards is
     dramatically faster, especially over HTTP.
@@ -212,7 +234,7 @@ python scripts/build_data.py \
   --umaps  /path/to/umaps
 ```
 
-It writes all three Parquet tables plus `manifest.json` into
+It writes all four Parquet tables plus `manifest.json` into
 `docs/data/tables/`, printing every trait-name merge and perturbation rename it
 applies, followed by a coverage report showing how many pairs lack genes and how
 many UMAP points lack results. Re-run it whenever the upstream results change;

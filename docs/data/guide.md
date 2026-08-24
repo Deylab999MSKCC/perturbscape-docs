@@ -90,6 +90,13 @@ seven datasets as one CSV.
 </div>
 
 <div class="ps-card" markdown>
+### Genes
+The detail panel shows the ten highest-ranked meta-program genes; **show all
+100** expands the rest. Every gene links to its HGNC symbol report in a new tab,
+resolved by stable HGNC id so renamed genes still land on the right page.
+</div>
+
+<div class="ps-card" markdown>
 ### Go deeper
 The [bulk Parquet tables](schema.md#bulk-downloads) hold everything the portal
 reads, and can be queried directly from Python or R without the browser.
@@ -123,10 +130,10 @@ mean.
 
 ## How this works
 
-The explorer runs entirely in your browser. All three tables are published as
+The explorer runs entirely in your browser. The tables are published as
 Parquet and queried with DuckDB compiled to WebAssembly, which fetches only the
 byte ranges a query touches. That is why a 4M-row gene table can be drilled into
-interactively without downloading it — the three files together are under 14 MB,
+interactively without downloading it — the files together are under 14 MB,
 and a typical drill-down transfers a small fraction of that.
 
 Nothing you select or type is sent anywhere. If the explorer fails to start, its

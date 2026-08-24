@@ -32,12 +32,16 @@ Source quirks handled here
 * UMAP files are named per dataset and, for the monocyte screens, per modality;
   T2D additionally uses a handful of perturbation spellings that differ from
   processed_data and are rewritten onto the processed_data form
+* gene symbols are resolved to stable HGNC ids so the portal can deep-link to
+  genenames.org. Symbol-based links break for genes HGNC has since renamed
+  (NCL is now NUCLEOLIN), so the id is resolved once here instead
 """
 import argparse
 import collections
 import json
 import pathlib
 import sys
+import urllib.request
 
 import pyarrow as pa
 import pyarrow.csv as pcsv
@@ -71,6 +75,54 @@ PERTURBATION_ALIASES = {
         "TET1_2_3":  "TET1/2/3",
     },
 }
+
+
+HGNC_URL = ("https://storage.googleapis.com/public-download-files/hgnc/"
+            "tsv/tsv/hgnc_complete_set.txt")
+
+
+def load_hgnc(path):
+    """symbol -> numeric HGNC id, covering current, previous and alias symbols.
+
+    A current symbol always wins over a previous or alias hit, so a live gene is
+    never shadowed by another gene's history.
+    """
+    if not path.exists():
+        print(f"  downloading HGNC complete set -> {path}", file=sys.stderr)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        urllib.request.urlretrieve(HGNC_URL, path)
+
+    current, historical = {}, {}
+    with path.open(encoding="utf-8") as fh:
+        header = fh.readline().rstrip("\n").split("\t")
+        idx = {name: i for i, name in enumerate(header)}
+        need = ("hgnc_id", "symbol", "alias_symbol", "prev_symbol")
+        if any(c not in idx for c in need):
+            print("  WARNING: unexpected HGNC columns, skipping gene links",
+                  file=sys.stderr)
+            return {}
+        for line in fh:
+            f = line.rstrip("\n").split("\t")
+            if len(f) <= idx["prev_symbol"]:
+                continue
+            raw = f[idx["hgnc_id"]]
+            if not raw.startswith("HGNC:"):
+                continue
+            gid = int(raw.split(":", 1)[1])
+            sym = f[idx["symbol"]].strip()
+            if sym:
+                current[sym] = gid
+            for col in ("prev_symbol", "alias_symbol"):
+                for alt in f[idx[col]].split("|"):
+                    alt = alt.strip().strip('"')
+                    if alt and alt not in historical:
+                        historical[alt] = gid
+
+    merged = dict(historical)
+    merged.update(current)      # current symbols take precedence
+    print(f"  {len(current):,} current symbols, "
+          f"{len(historical):,} previous/alias symbols", file=sys.stderr)
+    return merged
 
 
 def read_tsv(path):
@@ -214,6 +266,27 @@ def build_umaps(umaps, trait_map):
     ])
 
 
+def build_genes(meta, hgnc):
+    """One row per distinct gene symbol with its HGNC id, for deep-linking.
+
+    Kept out of meta_programs.parquet on purpose: 15k distinct symbols against
+    4M rows, so a join table is a fraction of the size of an extra column.
+    """
+    symbols = sorted({g for g in meta["gene"].cast(pa.string()).to_pylist() if g})
+    ids = [hgnc.get(g) for g in symbols] if hgnc else [None] * len(symbols)
+    hit = sum(1 for i in ids if i is not None)
+    print(f"  {hit:,}/{len(symbols):,} distinct symbols resolved "
+          f"({hit / max(1, len(symbols)):.1%})", file=sys.stderr)
+    if hit < len(symbols):
+        unresolved = [g for g, i in zip(symbols, ids) if i is None]
+        print(f"      unresolved: {', '.join(unresolved[:8])}"
+              + (" ..." if len(unresolved) > 8 else ""), file=sys.stderr)
+    return pa.table({
+        "gene": pa.array(symbols, pa.string()),
+        "hgnc_id": pa.array(ids, pa.int32()),
+    })
+
+
 def key_set(table, columns):
     cols = [table[c].cast(pa.string()).to_pylist() for c in columns]
     return set(zip(*cols))
@@ -277,6 +350,9 @@ def main():
                     help="folder holding the *_umap.txt files")
     ap.add_argument("--out", type=pathlib.Path,
                     default=pathlib.Path("docs/data/tables"))
+    ap.add_argument("--hgnc", type=pathlib.Path,
+                    default=pathlib.Path(".cache/hgnc_complete_set.txt"),
+                    help="HGNC complete set TSV; downloaded here if absent")
     args = ap.parse_args()
 
     for label, folder in (("source", args.source), ("umaps", args.umaps)):
@@ -297,17 +373,28 @@ def main():
     else:
         print("  no case-variant trait names found", file=sys.stderr)
 
+    print("resolving HGNC ids...", file=sys.stderr)
+    try:
+        hgnc = load_hgnc(args.hgnc)
+    except Exception as exc:
+        print(f"  WARNING: could not load HGNC ({exc}); gene links will fall "
+              f"back to symbol search", file=sys.stderr)
+        hgnc = {}
+
     print("building meta_programs...", file=sys.stderr)
     meta = build_meta_programs(args.source, trait_map)
     print("building pathways...", file=sys.stderr)
     paths = build_pathways(args.source, trait_map)
     print("building umaps...", file=sys.stderr)
     umap = build_umaps(args.umaps, trait_map)
+    print("building gene index...", file=sys.stderr)
+    genes = build_genes(meta, hgnc)
 
     outputs = {
         "meta_programs.parquet": (meta, 200_000),
         "pathways.parquet": (paths, 20_000),
         "umap.parquet": (umap, 20_000),
+        "genes.parquet": (genes, 20_000),
     }
     sizes = {}
     for name, (table, row_group) in outputs.items():

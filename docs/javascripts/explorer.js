@@ -15,8 +15,15 @@
   const PW = "pathways.parquet";
   const MP = "meta_programs.parquet";
   const UM = "umap.parquet";
+  const GN = "genes.parquet";
   const PAGE = 50;
   const MAX_SUGGESTIONS = 12;
+  const GENE_PREVIEW = 10;
+  // Deep-link by stable HGNC id where we resolved one. Symbol-based links break
+  // for genes HGNC has since renamed - NCL now reports under NUCLEOLIN - so the
+  // symbol form is only a fallback for the handful with no id.
+  const HGNC_ID = "https://www.genenames.org/data/gene-symbol-report/#!/hgnc_id/HGNC:";
+  const HGNC_SEARCH = "https://www.genenames.org/tools/search/#!/?query=";
 
   const esc = (s) => String(s == null ? "" : s)
     .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
@@ -49,16 +56,16 @@
   // brighten, so the two are not simple inversions of each other.
   const PALETTES = {
     dark: {
-      stops: [[46, 92, 122], [56, 189, 248], [165, 243, 252]],
-      zero: [42, 54, 70], zeroAlpha: 0.85,
-      none: [38, 48, 62], noneAlpha: 0.5,
-      ring: "#A5F3FC", hoverRing: "#8B9BAF",
+      stops: [[56, 116, 152], [56, 189, 248], [165, 243, 252]],
+      zero: [74, 92, 114], zeroAlpha: 0.95,
+      none: [52, 66, 84], noneAlpha: 0.85,
+      ring: "#A5F3FC", hoverRing: "#B6C4D4",
     },
     light: {
-      stops: [[147, 197, 226], [26, 133, 193], [8, 63, 99]],
-      zero: [205, 214, 226], zeroAlpha: 0.95,
-      none: [226, 232, 240], noneAlpha: 0.85,
-      ring: "#0B7FBF", hoverRing: "#56657A",
+      stops: [[130, 180, 214], [26, 133, 193], [8, 63, 99]],
+      zero: [170, 185, 203], zeroAlpha: 1,
+      none: [203, 213, 225], noneAlpha: 1,
+      ring: "#0B7FBF", hoverRing: "#46566C",
     },
   };
 
@@ -104,7 +111,7 @@
     const base = new URL(el.getAttribute("data-base") || "tables/",
                          window.location.href).href;
     setStatus("Connecting to data tables");
-    for (const f of [PW, MP, UM]) {
+    for (const f of [PW, MP, UM, GN]) {
       await db.registerFileURL(f, base + f, duckdb.DuckDBDataProtocol.HTTP, false);
     }
     const conn = await db.connect();
@@ -426,11 +433,22 @@
     }
 
     async function loadDetail(p) {
-      const where = `dataset = ${q(ui.ds.value)} AND context = ${q(ui.ctx.value)} ` +
-                    `AND perturbation = ${q(p.perturbation)} AND trait = ${q(ui.trait.value)}`;
+      // built per alias rather than string-rewritten, so a perturbation name can
+      // never collide with the column names being qualified
+      const clause = (a) => [
+        `${a}dataset = ${q(ui.ds.value)}`,
+        `${a}context = ${q(ui.ctx.value)}`,
+        `${a}perturbation = ${q(p.perturbation)}`,
+        `${a}trait = ${q(ui.trait.value)}`,
+      ].join(" AND ");
+
       const [pwRows, genes] = await Promise.all([
-        conn.query(`SELECT pathways, neglog10p_pathways FROM '${PW}' WHERE ${where} LIMIT 1`),
-        conn.query(`SELECT gene, rank FROM '${MP}' WHERE ${where} ORDER BY rank LIMIT 100`),
+        conn.query(`SELECT pathways, neglog10p_pathways FROM '${PW}'
+                    WHERE ${clause("")} LIMIT 1`),
+        conn.query(`SELECT m.gene, m.rank, g.hgnc_id
+                    FROM '${MP}' m LEFT JOIN '${GN}' g ON m.gene = g.gene
+                    WHERE ${clause("m.")}
+                    ORDER BY m.rank LIMIT 100`),
       ]);
       if (selected !== p) return;
       const box = el.querySelector("#psx-detail-body");
@@ -439,15 +457,41 @@
       const gs = rows(genes);
       box.innerHTML = `
         <section><h4>Top meta-program genes</h4>
-          <div class="ps-x-genes">${
-            gs.length ? gs.map((g, i) =>
-              `<span class="ps-x-gene ${i < 10 ? "ps-x-gene--top" : ""}">${
-                esc(g.gene)}<span class="ps-x-rank">${Math.round(g.rank)}</span></span>`
-            ).join("")
-            : '<span class="ps-x-nsig">No meta-program genes recorded.</span>'}
-          </div></section>
+          <div class="ps-x-genes" id="psx-genes"></div></section>
         <section><h4>Enriched pathways</h4>
           <div class="ps-x-pathways">${pathwayPanel(pw)}</div></section>`;
+      renderGenes(el.querySelector("#psx-genes"), gs, false);
+    }
+
+    const geneUrl = (g) => g.hgnc_id
+      ? HGNC_ID + g.hgnc_id
+      : HGNC_SEARCH + encodeURIComponent(g.gene);
+
+    function geneChip(g, i) {
+      return `<a class="ps-x-gene ${i < GENE_PREVIEW ? "ps-x-gene--top" : ""}"
+                 href="${geneUrl(g)}" target="_blank" rel="noopener noreferrer"
+                 title="${esc(g.gene)} on genenames.org">${esc(g.gene)}<span
+                 class="ps-x-rank">${Math.round(g.rank)}</span></a>`;
+    }
+
+    // only the top few are shown up front; the rest are one click away
+    function renderGenes(box, gs, expanded) {
+      if (!box) return;
+      if (!gs.length) {
+        box.innerHTML = '<span class="ps-x-nsig">No meta-program genes recorded.</span>';
+        return;
+      }
+      const shown = expanded ? gs : gs.slice(0, GENE_PREVIEW);
+      const hidden = gs.length - shown.length;
+      box.innerHTML = shown.map(geneChip).join("") +
+        (hidden > 0
+          ? `<button class="ps-x-genes-more" type="button" data-expand="1">… show all ${gs.length}</button>`
+          : (gs.length > GENE_PREVIEW
+              ? `<button class="ps-x-genes-more" type="button" data-expand="0">show top ${GENE_PREVIEW}</button>`
+              : ""));
+      const btn = box.querySelector(".ps-x-genes-more");
+      if (btn) btn.addEventListener("click", () =>
+        renderGenes(box, gs, btn.getAttribute("data-expand") === "1"));
     }
 
     function pathwayPanel(row) {

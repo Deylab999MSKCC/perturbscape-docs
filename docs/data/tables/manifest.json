@@ -258,6 +258,7 @@
  "files": {
   "meta_programs.parquet": 9426166,
   "pathways.parquet": 3467519,
-  "umap.parquet": 672457
+  "umap.parquet": 672457,
+  "genes.parquet": 143403
  }
 }
