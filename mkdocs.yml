@@ -129,5 +129,6 @@ nav:
 
   - Data Portal:
       - data/index.md
+      - How to Read the Portal: data/guide.md
       - Datasets: data/datasets.md
       - Schema and Downloads: data/schema.md

@@ -14,6 +14,7 @@
   const MP = "meta_programs.parquet";
   const UM = "umap.parquet";
   const PAGE = 50;
+  const MAX_SUGGESTIONS = 12;
 
   const esc = (s) => String(s == null ? "" : s)
     .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
@@ -41,18 +42,33 @@
 
   /* ---------------------------------------------------------------- colour */
 
-  // TRS 0 means "not significant" and is deliberately dim; positive values ramp
-  // through the site accent so significant perturbations read as lit up.
-  const STOPS = [[46, 92, 122], [56, 189, 248], [165, 243, 252]];
-  const ZERO = [42, 54, 70];
-  const NO_RESULT = [30, 39, 51];
+  // Both palettes keep the same reading: faint means "not significant", strong
+  // means "significant". On white that requires the ramp to darken rather than
+  // brighten, so the two are not simple inversions of each other.
+  const PALETTES = {
+    dark: {
+      stops: [[46, 92, 122], [56, 189, 248], [165, 243, 252]],
+      zero: [42, 54, 70], zeroAlpha: 0.85,
+      none: [38, 48, 62], noneAlpha: 0.5,
+      ring: "#A5F3FC", hoverRing: "#8B9BAF",
+    },
+    light: {
+      stops: [[147, 197, 226], [26, 133, 193], [8, 63, 99]],
+      zero: [205, 214, 226], zeroAlpha: 0.95,
+      none: [226, 232, 240], noneAlpha: 0.85,
+      ring: "#0B7FBF", hoverRing: "#56657A",
+    },
+  };
 
-  function ramp(t) {
+  const isDark = () => document.body.getAttribute("data-md-color-scheme") === "slate";
+  const palette = () => PALETTES[isDark() ? "dark" : "light"];
+
+  function ramp(t, stops) {
     t = Math.max(0, Math.min(1, t));
-    const seg = t * (STOPS.length - 1);
-    const i = Math.min(STOPS.length - 2, Math.floor(seg));
+    const seg = t * (stops.length - 1);
+    const i = Math.min(stops.length - 2, Math.floor(seg));
     const f = seg - i;
-    const a = STOPS[i], b = STOPS[i + 1];
+    const a = stops[i], b = stops[i + 1];
     return [
       Math.round(a[0] + (b[0] - a[0]) * f),
       Math.round(a[1] + (b[1] - a[1]) * f),
@@ -60,12 +76,13 @@
     ];
   }
 
-  const rgb = (c, alpha) => `rgba(${c[0]},${c[1]},${c[2]},${alpha == null ? 1 : alpha})`;
+  const rgb = (c, alpha) =>
+    `rgba(${c[0]},${c[1]},${c[2]},${alpha == null ? 1 : alpha})`;
 
-  function colourFor(pt, maxTRS) {
-    if (!pt.has_result) return rgb(NO_RESULT, 0.55);
-    if (!pt.trs || pt.trs <= 0) return rgb(ZERO, 0.85);
-    return rgb(ramp(maxTRS > 0 ? pt.trs / maxTRS : 0));
+  function colourFor(pt, maxTRS, pal) {
+    if (!pt.has_result) return rgb(pal.none, pal.noneAlpha);
+    if (!pt.trs || pt.trs <= 0) return rgb(pal.zero, pal.zeroAlpha);
+    return rgb(ramp(maxTRS > 0 ? pt.trs / maxTRS : 0, pal.stops));
   }
 
   /* ------------------------------------------------------------------ boot */
@@ -103,11 +120,17 @@
     <select id="psx-ctx"></select></div>
   <div class="ps-x-field"><label for="psx-trait">Trait</label>
     <select id="psx-trait"></select></div>
-  <div class="ps-x-field"><label for="psx-pert">Find perturbation</label>
-    <input id="psx-pert" type="search" placeholder="e.g. TP53" autocomplete="off"></div>
+  <div class="ps-x-field ps-x-field--search">
+    <label for="psx-pert">Find perturbation</label>
+    <input id="psx-pert" type="text" placeholder="Start typing, e.g. TP53"
+           autocomplete="off" role="combobox" aria-expanded="false"
+           aria-controls="psx-suggest" aria-autocomplete="list">
+    <ul class="ps-x-suggest" id="psx-suggest" role="listbox" hidden></ul>
+  </div>
 </div>
+
 <div class="ps-x-toolbar">
-  <div class="ps-x-views" role="tablist">
+  <div class="ps-x-views">
     <button class="ps-x-view is-active" id="psx-view-umap" type="button">UMAP</button>
     <button class="ps-x-view" id="psx-view-table" type="button">Table</button>
   </div>
@@ -118,41 +141,43 @@
   <button class="ps-x-btn" id="psx-dl-all" type="button">Download all</button>
 </div>
 
-<div class="ps-x-stage" id="psx-stage">
-  <div class="ps-x-plotwrap">
-    <canvas id="psx-canvas"></canvas>
-    <div class="ps-x-tooltip" id="psx-tooltip" hidden></div>
-    <div class="ps-x-plotinfo">
-      <div class="ps-x-legend">
-        <span class="ps-x-legend-label">TRS</span>
-        <span class="ps-x-legend-bar" id="psx-legend-bar"></span>
-        <span class="ps-x-legend-max" id="psx-legend-max"></span>
+<div class="ps-x-stage">
+  <div class="ps-x-main">
+    <div class="ps-x-plotwrap" id="psx-plotwrap">
+      <canvas id="psx-canvas"></canvas>
+      <div class="ps-x-tooltip" id="psx-tooltip" hidden></div>
+      <div class="ps-x-plotinfo">
+        <div class="ps-x-legend">
+          <span class="ps-x-legend-label">TRS</span>
+          <span class="ps-x-legend-bar" id="psx-legend-bar"></span>
+          <span class="ps-x-legend-max" id="psx-legend-max"></span>
+        </div>
+        <div class="ps-x-legend-keys">
+          <span><i class="ps-x-swatch ps-x-swatch--zero"></i>not significant</span>
+          <span><i class="ps-x-swatch ps-x-swatch--none"></i>no results</span>
+        </div>
       </div>
-      <div class="ps-x-legend-keys">
-        <span><i class="ps-x-swatch ps-x-swatch--zero"></i>not significant</span>
-        <span><i class="ps-x-swatch ps-x-swatch--none"></i>no results</span>
+      <button class="ps-x-reset" id="psx-reset-view" type="button">Reset view</button>
+    </div>
+
+    <div class="ps-x-tablewrap" id="psx-tablewrap" hidden>
+      <div class="ps-x-scroll">
+        <table class="ps-x-table"><thead><tr>
+          <th data-col="perturbation">Perturbation<span class="ps-x-arrow"></span></th>
+          <th data-col="trs" class="ps-x-num">TRS<span class="ps-x-arrow"></span></th>
+          <th data-col="pvalue" class="ps-x-num">P<span class="ps-x-arrow"></span></th>
+          <th class="ps-x-nosort">Top pathways</th>
+        </tr></thead><tbody id="psx-body"></tbody></table>
+      </div>
+      <div class="ps-x-pager">
+        <button class="ps-x-btn" id="psx-prev" type="button">Prev</button>
+        <span class="ps-x-page" id="psx-page"></span>
+        <button class="ps-x-btn" id="psx-next" type="button">Next</button>
       </div>
     </div>
-    <button class="ps-x-reset" id="psx-reset-view" type="button">Reset view</button>
   </div>
-  <aside class="ps-x-detail-panel" id="psx-detail"></aside>
-</div>
 
-<div class="ps-x-tablewrap" id="psx-tablewrap" hidden>
-  <div class="ps-x-scroll">
-    <table class="ps-x-table"><thead><tr>
-      <th data-col="perturbation">Perturbation<span class="ps-x-arrow"></span></th>
-      <th data-col="trait">Trait<span class="ps-x-arrow"></span></th>
-      <th data-col="trs" class="ps-x-num">TRS<span class="ps-x-arrow"></span></th>
-      <th data-col="pvalue" class="ps-x-num">P<span class="ps-x-arrow"></span></th>
-      <th class="ps-x-nosort">Top pathways</th>
-    </tr></thead><tbody id="psx-body"></tbody></table>
-  </div>
-  <div class="ps-x-pager">
-    <button class="ps-x-btn" id="psx-prev" type="button">Prev</button>
-    <span class="ps-x-page" id="psx-page"></span>
-    <button class="ps-x-btn" id="psx-next" type="button">Next</button>
-  </div>
+  <aside class="ps-x-detail-panel" id="psx-detail"></aside>
 </div>`;
 
   function render(el, ctx) {
@@ -162,10 +187,10 @@
 
     const ui = {
       ds: $("psx-ds"), ctx: $("psx-ctx"), ctxField: $("psx-ctx-field"),
-      trait: $("psx-trait"), pert: $("psx-pert"), sig: $("psx-sig"),
-      sigWrap: $("psx-sig-wrap"),
+      trait: $("psx-trait"), pert: $("psx-pert"), suggest: $("psx-suggest"),
+      sig: $("psx-sig"), sigWrap: $("psx-sig-wrap"),
       viewUmap: $("psx-view-umap"), viewTable: $("psx-view-table"),
-      stage: $("psx-stage"), tableWrap: $("psx-tablewrap"),
+      plotwrap: $("psx-plotwrap"), tableWrap: $("psx-tablewrap"),
       canvas: $("psx-canvas"), tooltip: $("psx-tooltip"),
       detail: $("psx-detail"), summary: $("psx-summary"),
       body: $("psx-body"), page: $("psx-page"),
@@ -176,33 +201,37 @@
     };
 
     let view = "umap";
-    let points = [];          // current umap selection
+    let points = [];
     let maxTRS = 0;
     let selected = null;
     let hovered = null;
     let transform = { k: 1, x: 0, y: 0 };
     let bounds = null;
     let sortCol = "pvalue", sortAsc = true, page = 0;
+    let suggestions = [], suggestIndex = -1;
+    let tablePage = [];
 
-    ui.legendBar.style.background =
-      `linear-gradient(90deg, ${rgb(STOPS[0])}, ${rgb(STOPS[1])}, ${rgb(STOPS[2])})`;
+    function paintLegend() {
+      const p = palette();
+      ui.legendBar.style.background = `linear-gradient(90deg, ${
+        p.stops.map((s) => rgb(s)).join(", ")})`;
+      el.querySelectorAll(".ps-x-swatch--zero").forEach((n) =>
+        n.style.background = rgb(p.zero, p.zeroAlpha));
+      el.querySelectorAll(".ps-x-swatch--none").forEach((n) =>
+        n.style.background = rgb(p.none, p.noneAlpha));
+    }
 
     /* ---------------------------------------------------------- selectors */
 
-    function datasetsWithUmap() {
-      return Object.keys(manifest.datasets)
-        .filter((d) => (manifest.datasets[d].umap_traits || []).length)
-        .sort();
-    }
+    const natural = (a, b) =>
+      String(a).localeCompare(String(b), undefined, { numeric: true });
 
     function fillDatasets() {
-      const list = datasetsWithUmap();
+      const list = Object.keys(manifest.datasets)
+        .filter((d) => (manifest.datasets[d].umap_traits || []).length).sort();
       ui.ds.innerHTML = list.map((d) => `<option>${esc(d)}</option>`).join("");
       ui.ds.value = list[0];
     }
-
-    // D3 / D7 / D11 must not sort as D11 / D3 / D7
-    const natural = (a, b) => String(a).localeCompare(String(b), undefined, { numeric: true });
 
     function fillContexts() {
       const info = manifest.datasets[ui.ds.value] || { contexts: [] };
@@ -215,8 +244,7 @@
     }
 
     function fillTraits() {
-      const info = manifest.datasets[ui.ds.value] || {};
-      const traits = info.umap_traits || [];
+      const traits = (manifest.datasets[ui.ds.value] || {}).umap_traits || [];
       const keep = ui.trait.value;
       ui.trait.innerHTML = traits.map((t) => `<option>${esc(t)}</option>`).join("");
       ui.trait.value = traits.includes(keep) ? keep : traits[0];
@@ -244,15 +272,14 @@
       ui.legendMax.textContent = maxTRS ? maxTRS.toFixed(2) : "";
 
       const nSig = points.filter((p) => p.pvalue != null && p.pvalue <= 0.05).length;
-      const nNo = points.filter((p) => !p.has_result).length;
       ui.summary.innerHTML =
         `<b>${points.length.toLocaleString()}</b> perturbations · ` +
-        `<b>${nSig.toLocaleString()}</b> significant` +
-        (nNo ? ` · ${nNo.toLocaleString()} without results` : "");
+        `<b>${nSig.toLocaleString()}</b> significant`;
 
       computeBounds();
       resetTransform();
       selected = null;
+      page = 0;
       renderDetail(null);
       draw();
     }
@@ -282,7 +309,6 @@
     function project(p) {
       const { w, h } = canvasSize();
       const sx = (p.umap1 - bounds.x0) / (bounds.x1 - bounds.x0) * w;
-      // flip y so the plot reads the same way round as ggplot output
       const sy = h - (p.umap2 - bounds.y0) / (bounds.y1 - bounds.y0) * h;
       return { x: sx * transform.k + transform.x, y: sy * transform.k + transform.y };
     }
@@ -298,10 +324,10 @@
       g.clearRect(0, 0, w, h);
       if (!bounds || !points.length) return;
 
+      const pal = palette();
       const term = ui.pert.value.trim().toLowerCase();
       const r = 3.1 * Math.min(2.2, Math.max(0.75, transform.k));
 
-      // dim first, lit second, so significant points are never buried
       const order = points.slice().sort((a, b) => (a.trs || 0) - (b.trs || 0));
       for (const p of order) {
         const s = project(p);
@@ -309,13 +335,13 @@
         const match = term && p.perturbation.toLowerCase().includes(term);
         g.beginPath();
         g.arc(s.x, s.y, match ? r * 1.7 : r, 0, Math.PI * 2);
-        g.fillStyle = colourFor(p, maxTRS);
-        g.globalAlpha = term && !match ? 0.18 : 1;
+        g.fillStyle = colourFor(p, maxTRS, pal);
+        g.globalAlpha = term && !match ? 0.15 : 1;
         g.fill();
         if (match) {
           g.globalAlpha = 1;
           g.lineWidth = 1.2;
-          g.strokeStyle = "#A5F3FC";
+          g.strokeStyle = pal.ring;
           g.stroke();
         }
       }
@@ -327,14 +353,14 @@
         g.beginPath();
         g.arc(s.x, s.y, r + 4.5, 0, Math.PI * 2);
         g.lineWidth = p === selected ? 2 : 1.2;
-        g.strokeStyle = p === selected ? "#A5F3FC" : "#8B9BAF";
+        g.strokeStyle = p === selected ? pal.ring : pal.hoverRing;
         g.stroke();
       }
     }
 
     function pick(mx, my) {
       if (!bounds) return null;
-      let best = null, bestD = 12 * 12;
+      let best = null, bestD = 144;
       for (const p of points) {
         const s = project(p);
         const d = (s.x - mx) ** 2 + (s.y - my) ** 2;
@@ -343,12 +369,30 @@
       return best;
     }
 
+    function focusOn(p) {
+      if (!bounds) return;
+      const { w, h } = canvasSize();
+      transform.k = Math.max(transform.k, 2.4);
+      const sx = (p.umap1 - bounds.x0) / (bounds.x1 - bounds.x0) * w;
+      const sy = h - (p.umap2 - bounds.y0) / (bounds.y1 - bounds.y0) * h;
+      transform.x = w / 2 - sx * transform.k;
+      transform.y = h / 2 - sy * transform.k;
+      draw();
+    }
+
     /* ------------------------------------------------------------- detail */
+
+    function select(p, opts) {
+      selected = p;
+      renderDetail(p);
+      if (view === "umap") draw();
+      else markSelectedRow();
+    }
 
     function renderDetail(p) {
       if (!p) {
         ui.detail.innerHTML =
-          `<div class="ps-x-detail-empty">Select a point to see its
+          `<div class="ps-x-detail-empty">Select a perturbation to see its
            meta-program genes and enriched pathways.</div>`;
         return;
       }
@@ -363,23 +407,28 @@
             <div><dt>TRS</dt><dd class="${sig ? "ps-x-sig" : "ps-x-nsig"}">${fmtTRS(p.trs)}</dd></div>
             <div><dt>P</dt><dd class="${sig ? "ps-x-sig" : "ps-x-nsig"}">${fmtP(p.pvalue)}</dd></div>
           </dl>
+          <button class="ps-x-locate" id="psx-locate" type="button">Show on UMAP</button>
         </div>
         <div class="ps-x-detail-body" id="psx-detail-body">
           ${p.has_result ? '<div class="ps-x-detail-empty">Loading…</div>'
-            : '<div class="ps-x-detail-empty">No enrichment results were produced for this perturbation and trait.</div>'}
+            : '<div class="ps-x-detail-empty">No enrichment results were produced for this perturbation and trait, so there are no meta-program genes or pathways to show.</div>'}
         </div>`;
+      const locate = el.querySelector("#psx-locate");
+      if (locate) locate.addEventListener("click", () => {
+        setView("umap");
+        focusOn(p);
+      });
       if (p.has_result) loadDetail(p);
     }
 
     async function loadDetail(p) {
-      const d = ui.ds.value, c = ui.ctx.value, t = ui.trait.value;
-      const where = `dataset = ${q(d)} AND context = ${q(c)} ` +
-                    `AND perturbation = ${q(p.perturbation)} AND trait = ${q(t)}`;
+      const where = `dataset = ${q(ui.ds.value)} AND context = ${q(ui.ctx.value)} ` +
+                    `AND perturbation = ${q(p.perturbation)} AND trait = ${q(ui.trait.value)}`;
       const [pwRows, genes] = await Promise.all([
         conn.query(`SELECT pathways, neglog10p_pathways FROM '${PW}' WHERE ${where} LIMIT 1`),
         conn.query(`SELECT gene, rank FROM '${MP}' WHERE ${where} ORDER BY rank LIMIT 100`),
       ]);
-      if (selected !== p) return;   // selection moved on while we waited
+      if (selected !== p) return;
       const box = el.querySelector("#psx-detail-body");
       if (!box) return;
       const pw = rows(pwRows)[0] || {};
@@ -416,6 +465,85 @@
       }).join("");
     }
 
+    /* --------------------------------------------------------- suggestions */
+
+    function closeSuggest() {
+      ui.suggest.hidden = true;
+      ui.suggest.innerHTML = "";
+      ui.pert.setAttribute("aria-expanded", "false");
+      suggestions = []; suggestIndex = -1;
+    }
+
+    function openSuggest() {
+      const term = ui.pert.value.trim().toLowerCase();
+      if (!term) return closeSuggest();
+
+      const starts = [], contains = [];
+      for (const p of points) {
+        const name = p.perturbation.toLowerCase();
+        const i = name.indexOf(term);
+        if (i === 0) starts.push(p);
+        else if (i > 0) contains.push(p);
+      }
+      const rank = (a, b) => (b.trs || 0) - (a.trs || 0) ||
+        natural(a.perturbation, b.perturbation);
+      suggestions = starts.sort(rank).concat(contains.sort(rank))
+        .slice(0, MAX_SUGGESTIONS);
+      suggestIndex = -1;
+
+      if (!suggestions.length) {
+        ui.suggest.innerHTML =
+          `<li class="ps-x-suggest-empty">No perturbation matches “${
+            esc(ui.pert.value.trim())}”</li>`;
+        ui.suggest.hidden = false;
+        ui.pert.setAttribute("aria-expanded", "true");
+        return;
+      }
+
+      ui.suggest.innerHTML = suggestions.map((p, i) => {
+        const sig = p.pvalue != null && p.pvalue <= 0.05;
+        const name = p.perturbation;
+        const at = name.toLowerCase().indexOf(term);
+        const marked = at < 0 ? esc(name)
+          : esc(name.slice(0, at)) + "<mark>" + esc(name.slice(at, at + term.length)) +
+            "</mark>" + esc(name.slice(at + term.length));
+        return `<li role="option" data-i="${i}" aria-selected="false">
+          <span class="ps-x-suggest-name">${marked}</span>
+          <span class="ps-x-suggest-trs ${sig ? "ps-x-sig" : "ps-x-nsig"}">${
+            p.has_result ? fmtTRS(p.trs) : "—"}</span></li>`;
+      }).join("");
+      ui.suggest.hidden = false;
+      ui.pert.setAttribute("aria-expanded", "true");
+
+      ui.suggest.querySelectorAll("li[data-i]").forEach((li) => {
+        li.addEventListener("mousedown", (e) => {
+          e.preventDefault();
+          choose(suggestions[Number(li.getAttribute("data-i"))]);
+        });
+      });
+    }
+
+    function highlightSuggestion(next) {
+      const items = ui.suggest.querySelectorAll("li[data-i]");
+      if (!items.length) return;
+      suggestIndex = (next + items.length) % items.length;
+      items.forEach((li, i) => {
+        const on = i === suggestIndex;
+        li.classList.toggle("is-active", on);
+        li.setAttribute("aria-selected", on ? "true" : "false");
+        if (on) li.scrollIntoView({ block: "nearest" });
+      });
+    }
+
+    function choose(p) {
+      if (!p) return;
+      ui.pert.value = p.perturbation;
+      closeSuggest();
+      select(p);
+      if (view === "umap") focusOn(p);
+      else { page = 0; drawTable(); }
+    }
+
     /* -------------------------------------------------------------- table */
 
     function tableRows() {
@@ -432,20 +560,24 @@
       });
     }
 
-    let tableCache = [];
+    function markSelectedRow() {
+      ui.body.querySelectorAll("tr[data-idx]").forEach((tr) => {
+        const p = tablePage[Number(tr.getAttribute("data-idx"))];
+        tr.classList.toggle("is-selected", p === selected);
+      });
+    }
 
     async function drawTable() {
-      tableCache = tableRows();
-      const pages = Math.max(1, Math.ceil(tableCache.length / PAGE));
+      const all = tableRows();
+      const pages = Math.max(1, Math.ceil(all.length / PAGE));
       if (page >= pages) page = pages - 1;
-      const slice = tableCache.slice(page * PAGE, page * PAGE + PAGE);
+      tablePage = all.slice(page * PAGE, page * PAGE + PAGE);
 
-      if (!slice.length) {
+      if (!tablePage.length) {
         ui.body.innerHTML =
-          `<tr><td colspan="5" class="ps-x-empty">No perturbations match.</td></tr>`;
+          `<tr><td colspan="4" class="ps-x-empty">No perturbations match.</td></tr>`;
       } else {
-        // pathway text is only needed for the visible page
-        const names = slice.map((p) => q(p.perturbation)).join(",");
+        const names = tablePage.map((p) => q(p.perturbation)).join(",");
         const pwMap = {};
         if (names) {
           const res = rows(await conn.query(`
@@ -454,27 +586,23 @@
               AND trait = ${q(ui.trait.value)} AND perturbation IN (${names})`));
           for (const r of res) pwMap[r.perturbation] = r.pathways;
         }
-        ui.body.innerHTML = slice.map((p, i) => {
+        ui.body.innerHTML = tablePage.map((p, i) => {
           const sig = p.pvalue != null && p.pvalue <= 0.05;
           const pw = (pwMap[p.perturbation] || "").split(";")
             .slice(0, 3).map((s) => s.trim()).filter(Boolean).join(" · ");
           return `<tr data-idx="${i}">
             <td class="ps-x-mono"><b>${esc(p.perturbation)}</b></td>
-            <td>${esc(ui.trait.value)}</td>
             <td class="ps-x-num ${sig ? "ps-x-sig" : "ps-x-nsig"}">${fmtTRS(p.trs)}</td>
             <td class="ps-x-num ${sig ? "ps-x-sig" : "ps-x-nsig"}">${fmtP(p.pvalue)}</td>
             <td><div class="ps-x-trunc">${pw ? esc(pw) : "—"}</div></td>
           </tr>`;
         }).join("");
+        // selecting a row fills the detail panel in place - the table stays put
         ui.body.querySelectorAll("tr[data-idx]").forEach((tr) => {
-          tr.addEventListener("click", () => {
-            const p = slice[Number(tr.getAttribute("data-idx"))];
-            selected = p;
-            setView("umap");
-            focusOn(p);
-            renderDetail(p);
-          });
+          tr.addEventListener("click", () =>
+            select(tablePage[Number(tr.getAttribute("data-idx"))]));
         });
+        markSelectedRow();
       }
       ui.page.textContent = `Page ${page + 1} of ${pages.toLocaleString()}`;
       ui.prev.disabled = page === 0;
@@ -484,16 +612,6 @@
         if (a) a.textContent = th.getAttribute("data-col") === sortCol
           ? (sortAsc ? " ▲" : " ▼") : "";
       });
-    }
-
-    function focusOn(p) {
-      const { w, h } = canvasSize();
-      transform.k = Math.max(transform.k, 2.4);
-      const sx = (p.umap1 - bounds.x0) / (bounds.x1 - bounds.x0) * w;
-      const sy = h - (p.umap2 - bounds.y0) / (bounds.y1 - bounds.y0) * h;
-      transform.x = w / 2 - sx * transform.k;
-      transform.y = h / 2 - sy * transform.k;
-      draw();
     }
 
     /* ---------------------------------------------------------- downloads */
@@ -513,48 +631,47 @@
       setTimeout(() => URL.revokeObjectURL(url), 1500);
     }
 
-    async function downloadView() {
-      const btn = ui.dlView, old = btn.textContent;
+    async function withBusy(btn, fn) {
+      const old = btn.textContent;
       btn.disabled = true; btn.textContent = "Preparing…";
-      try {
-        const list = tableRows();
-        const names = list.map((p) => q(p.perturbation));
-        let pwMap = {};
-        for (let i = 0; i < names.length; i += 800) {
-          const chunk = names.slice(i, i + 800).join(",");
-          const res = rows(await conn.query(`
-            SELECT perturbation, pathways, neglog10p_pathways FROM '${PW}'
-            WHERE dataset = ${q(ui.ds.value)} AND context = ${q(ui.ctx.value)}
-              AND trait = ${q(ui.trait.value)} AND perturbation IN (${chunk})`));
-          for (const r of res) pwMap[r.perturbation] = r;
-        }
-        const data = list.map((p) => ({
+      try { await fn(); } finally { btn.disabled = false; btn.textContent = old; }
+    }
+
+    const downloadView = () => withBusy(ui.dlView, async () => {
+      const list = tableRows();
+      const names = list.map((p) => q(p.perturbation));
+      const pwMap = {};
+      for (let i = 0; i < names.length; i += 800) {
+        const chunk = names.slice(i, i + 800).join(",");
+        if (!chunk) continue;
+        const res = rows(await conn.query(`
+          SELECT perturbation, pathways, neglog10p_pathways FROM '${PW}'
+          WHERE dataset = ${q(ui.ds.value)} AND context = ${q(ui.ctx.value)}
+            AND trait = ${q(ui.trait.value)} AND perturbation IN (${chunk})`));
+        for (const r of res) pwMap[r.perturbation] = r;
+      }
+      saveCSV(
+        `perturbscape_${ui.ds.value}_${ui.trait.value}`.replace(/[^\w-]+/g, "_") + ".csv",
+        ["dataset", "context", "trait", "perturbation", "trs", "pvalue",
+         "umap1", "umap2", "pathways", "neglog10p_pathways"],
+        list.map((p) => ({
           dataset: ui.ds.value, context: ui.ctx.value, trait: ui.trait.value,
           perturbation: p.perturbation, trs: p.trs, pvalue: p.pvalue,
           umap1: p.umap1, umap2: p.umap2,
           pathways: (pwMap[p.perturbation] || {}).pathways,
           neglog10p_pathways: (pwMap[p.perturbation] || {}).neglog10p_pathways,
-        }));
-        saveCSV(
-          `perturbscape_${ui.ds.value}_${ui.trait.value}`.replace(/[^\w-]+/g, "_") + ".csv",
-          ["dataset", "context", "trait", "perturbation", "trs", "pvalue",
-           "umap1", "umap2", "pathways", "neglog10p_pathways"], data);
-      } finally { btn.disabled = false; btn.textContent = old; }
-    }
+        })));
+    });
 
-    async function downloadAll() {
-      const btn = ui.dlAll, old = btn.textContent;
-      btn.disabled = true; btn.textContent = "Preparing…";
-      try {
-        const data = rows(await conn.query(`
-          SELECT dataset, context, perturbation, trait, trs, pvalue,
-                 pathways, neglog10p_pathways
-          FROM '${PW}' ORDER BY dataset, trait, pvalue`));
-        saveCSV("perturbscape_all_results.csv",
-          ["dataset", "context", "perturbation", "trait", "trs", "pvalue",
-           "pathways", "neglog10p_pathways"], data);
-      } finally { btn.disabled = false; btn.textContent = old; }
-    }
+    const downloadAll = () => withBusy(ui.dlAll, async () => {
+      const data = rows(await conn.query(`
+        SELECT dataset, context, perturbation, trait, trs, pvalue,
+               pathways, neglog10p_pathways
+        FROM '${PW}' ORDER BY dataset, trait, pvalue`));
+      saveCSV("perturbscape_all_results.csv",
+        ["dataset", "context", "perturbation", "trait", "trs", "pvalue",
+         "pathways", "neglog10p_pathways"], data);
+    });
 
     /* ------------------------------------------------------------- events */
 
@@ -563,7 +680,7 @@
       const isUmap = v === "umap";
       ui.viewUmap.classList.toggle("is-active", isUmap);
       ui.viewTable.classList.toggle("is-active", !isUmap);
-      ui.stage.hidden = !isUmap;
+      ui.plotwrap.hidden = !isUmap;
       ui.tableWrap.hidden = isUmap;
       ui.sigWrap.style.display = isUmap ? "none" : "";
       if (isUmap) requestAnimationFrame(draw); else drawTable();
@@ -589,8 +706,7 @@
     ui.canvas.addEventListener("click", (e) => {
       const r = ui.canvas.getBoundingClientRect();
       const p = pick(e.clientX - r.left, e.clientY - r.top);
-      if (!p) return;
-      selected = p; renderDetail(p); draw();
+      if (p) select(p);
     });
     ui.canvas.addEventListener("wheel", (e) => {
       e.preventDefault();
@@ -622,19 +738,37 @@
 
     ui.resetView.addEventListener("click", () => { resetTransform(); draw(); });
 
-    ui.ds.addEventListener("change", () => {
-      fillContexts(); fillTraits(); loadPoints().then(() => { if (view === "table") drawTable(); });
-    });
-    ui.ctx.addEventListener("change", () =>
-      loadPoints().then(() => { if (view === "table") drawTable(); }));
-    ui.trait.addEventListener("change", () =>
-      loadPoints().then(() => { if (view === "table") drawTable(); }));
+    const reload = () =>
+      loadPoints().then(() => { if (view === "table") drawTable(); });
+
+    ui.ds.addEventListener("change", () => { fillContexts(); fillTraits(); reload(); });
+    ui.ctx.addEventListener("change", reload);
+    ui.trait.addEventListener("change", reload);
 
     let t;
     ui.pert.addEventListener("input", () => {
       clearTimeout(t);
-      t = setTimeout(() => { page = 0; view === "umap" ? draw() : drawTable(); }, 180);
+      t = setTimeout(() => {
+        openSuggest();
+        page = 0;
+        if (view === "umap") draw(); else drawTable();
+      }, 130);
     });
+    ui.pert.addEventListener("focus", () => { if (ui.pert.value.trim()) openSuggest(); });
+    ui.pert.addEventListener("blur", () => setTimeout(closeSuggest, 140));
+    ui.pert.addEventListener("keydown", (e) => {
+      if (ui.suggest.hidden) {
+        if (e.key === "ArrowDown") { openSuggest(); e.preventDefault(); }
+        return;
+      }
+      if (e.key === "ArrowDown") { e.preventDefault(); highlightSuggestion(suggestIndex + 1); }
+      else if (e.key === "ArrowUp") { e.preventDefault(); highlightSuggestion(suggestIndex - 1); }
+      else if (e.key === "Enter") {
+        e.preventDefault();
+        choose(suggestions[suggestIndex >= 0 ? suggestIndex : 0]);
+      } else if (e.key === "Escape") closeSuggest();
+    });
+
     ui.sig.addEventListener("change", () => { page = 0; drawTable(); });
     ui.prev.addEventListener("click", () => { if (page > 0) { page--; drawTable(); } });
     ui.next.addEventListener("click", () => { page++; drawTable(); });
@@ -657,7 +791,12 @@
       rt = setTimeout(() => { if (view === "umap") draw(); }, 150);
     });
 
+    // the plot is a canvas, so it has to be repainted when the palette flips
+    new MutationObserver(() => { paintLegend(); if (view === "umap") draw(); })
+      .observe(document.body, { attributes: true, attributeFilter: ["data-md-color-scheme"] });
+
     fillDatasets(); fillContexts(); fillTraits();
+    paintLegend();
     setView("umap");
     renderDetail(null);
     return loadPoints();
@@ -669,7 +808,6 @@
     const el = document.querySelector(".ps-explorer");
     if (!el || el.dataset.psReady) return;
     el.dataset.psReady = "1";
-    // the explorer needs more width than the prose column allows
     document.body.classList.add("ps-wide");
 
     const setStatus = (msg) => {
