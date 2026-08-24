@@ -177,6 +177,13 @@ body, input, .md-typeset {
   background: var(--ps-surface);
   border: 1px solid var(--ps-border);
 }
+
+/* the theme colours the placeholder and icon from --md-primary-bg-color, which
+   is white here - invisible against the light search field */
+.md-search__input { color: var(--ps-text); }
+.md-search__input::placeholder { color: var(--ps-faint); opacity: 1; }
+.md-search__icon,
+.md-search__options .md-icon { color: var(--ps-muted); }
 .md-search__form:hover { background: var(--ps-surface-2); }
 [data-md-toggle="search"]:checked ~ .md-header .md-search__form {
   border-color: var(--ps-accent);
@@ -213,10 +220,15 @@ body, input, .md-typeset {
    4. Landing page
    -------------------------------------------------------------------------- */
 
+.md-content__button {
+  position: relative;
+  z-index: 3;
+}
+
 .ps-hero {
   position: relative;
   text-align: center;
-  padding: 3.4rem 1rem 2.2rem;
+  padding: 4rem 1rem 3rem;
   margin-bottom: 1rem;
   border-bottom: 1px solid var(--ps-border-soft);
 }
@@ -238,9 +250,9 @@ body, input, .md-typeset {
 .ps-hero > * { position: relative; }
 
 .ps-hero img {
-  max-width: min(430px, 84%);
+  max-width: min(620px, 92%);
   height: auto;
-  margin-bottom: .4rem;
+  margin-bottom: .6rem;
 }
 
 .ps-eyebrow {
@@ -255,9 +267,9 @@ body, input, .md-typeset {
 }
 
 .ps-hero .ps-tagline {
-  font-size: .96rem;
-  line-height: 1.62;
-  max-width: 40rem;
+  font-size: 1.02rem;
+  line-height: 1.66;
+  max-width: 38rem;
   margin: .8rem auto 0;
   color: var(--ps-muted);
   letter-spacing: -.01em;
@@ -769,6 +781,7 @@ body, input, .md-typeset {
 }
 .ps-x-legend { display: flex; align-items: center; gap: .4rem; }
 .ps-x-legend-label,
+.ps-x-legend-min,
 .ps-x-legend-max {
   font-family: var(--md-code-font-family, monospace);
   font-size: .55rem; letter-spacing: .1em; color: var(--ps-faint);
@@ -777,13 +790,6 @@ body, input, .md-typeset {
   display: block; width: 6rem; height: 5px;
   border-radius: 1px; border: 1px solid var(--ps-border);
 }
-.ps-x-legend-keys { display: flex; gap: .8rem; font-size: .55rem; color: var(--ps-faint); }
-.ps-x-legend-keys span { display: inline-flex; align-items: center; gap: .28rem; }
-.ps-x-swatch {
-  width: 7px; height: 7px; border-radius: 50%;
-  display: inline-block; border: 1px solid var(--ps-border);
-}
-
 .ps-x-reset {
   position: absolute;
   right: .7rem; top: .7rem;

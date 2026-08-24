@@ -18,6 +18,9 @@
   const GN = "genes.parquet";
   const PAGE = 50;
   const MAX_SUGGESTIONS = 12;
+  const MAX_ZOOM = 8;
+  const ZOOM_STEP = 1.08;
+  const FOCUS_ZOOM = 2.2;
   const GENE_PREVIEW = 10;
   // Deep-link by stable HGNC id where we resolved one. Symbol-based links break
   // for genes HGNC has since renamed - NCL now reports under NUCLEOLIN - so the
@@ -51,20 +54,20 @@
 
   /* ---------------------------------------------------------------- colour */
 
-  // Both palettes keep the same reading: faint means "not significant", strong
-  // means "significant". On white that requires the ramp to darken rather than
-  // brighten, so the two are not simple inversions of each other.
+  // One continuous scale. TRS is already thresholded upstream - it is zero unless
+  // the estimate was positive and significant - so the bottom of the ramp is
+  // exactly "not significant" and no separate category is needed. Positive
+  // values start partway up the ramp so even a small one is clearly not zero.
+  // On white the ramp has to darken rather than brighten, so the two palettes
+  // are not simple inversions of each other.
+  const POSITIVE_FLOOR = 0.32;
   const PALETTES = {
     dark: {
-      stops: [[56, 116, 152], [56, 189, 248], [165, 243, 252]],
-      zero: [74, 92, 114], zeroAlpha: 0.95,
-      none: [52, 66, 84], noneAlpha: 0.85,
+      stops: [[68, 85, 106], [47, 130, 178], [56, 189, 248], [165, 243, 252]],
       ring: "#A5F3FC", hoverRing: "#B6C4D4",
     },
     light: {
-      stops: [[130, 180, 214], [26, 133, 193], [8, 63, 99]],
-      zero: [170, 185, 203], zeroAlpha: 1,
-      none: [203, 213, 225], noneAlpha: 1,
+      stops: [[196, 205, 218], [116, 173, 212], [26, 133, 193], [8, 63, 99]],
       ring: "#0B7FBF", hoverRing: "#46566C",
     },
   };
@@ -89,9 +92,10 @@
     `rgba(${c[0]},${c[1]},${c[2]},${alpha == null ? 1 : alpha})`;
 
   function colourFor(pt, maxTRS, pal) {
-    if (!pt.has_result) return rgb(pal.none, pal.noneAlpha);
-    if (!pt.trs || pt.trs <= 0) return rgb(pal.zero, pal.zeroAlpha);
-    return rgb(ramp(maxTRS > 0 ? pt.trs / maxTRS : 0, pal.stops));
+    const v = pt.trs || 0;
+    if (v <= 0) return rgb(pal.stops[0]);
+    const frac = maxTRS > 0 ? Math.min(1, v / maxTRS) : 1;
+    return rgb(ramp(POSITIVE_FLOOR + (1 - POSITIVE_FLOOR) * frac, pal.stops));
   }
 
   /* ------------------------------------------------------------------ boot */
@@ -152,12 +156,9 @@
     <div class="ps-x-plotinfo">
       <div class="ps-x-legend">
         <span class="ps-x-legend-label">TRS</span>
+        <span class="ps-x-legend-min">0</span>
         <span class="ps-x-legend-bar" id="psx-legend-bar"></span>
         <span class="ps-x-legend-max" id="psx-legend-max"></span>
-      </div>
-      <div class="ps-x-legend-keys">
-        <span><i class="ps-x-swatch ps-x-swatch--zero"></i>not significant</span>
-        <span><i class="ps-x-swatch ps-x-swatch--none"></i>no results</span>
       </div>
     </div>
     <button class="ps-x-reset" id="psx-reset-view" type="button">Reset view</button>
@@ -220,11 +221,7 @@
     function paintLegend() {
       const p = palette();
       ui.legendBar.style.background = `linear-gradient(90deg, ${
-        p.stops.map((s) => rgb(s)).join(", ")})`;
-      el.querySelectorAll(".ps-x-swatch--zero").forEach((n) =>
-        n.style.background = rgb(p.zero, p.zeroAlpha));
-      el.querySelectorAll(".ps-x-swatch--none").forEach((n) =>
-        n.style.background = rgb(p.none, p.noneAlpha));
+        p.stops.map((c) => rgb(c)).join(", ")})`;
     }
 
     /* ---------------------------------------------------------- selectors */
@@ -343,8 +340,10 @@
         const s = project(p);
         if (s.x < -20 || s.y < -20 || s.x > w + 20 || s.y > h + 20) continue;
         const match = term && p.perturbation.toLowerCase().includes(term);
+        // size reinforces the colour, so a scored point is legible at a glance
+        const pr = (p.trs || 0) > 0 ? r * 1.4 : r;
         g.beginPath();
-        g.arc(s.x, s.y, match ? r * 1.7 : r, 0, Math.PI * 2);
+        g.arc(s.x, s.y, match ? pr * 1.6 : pr, 0, Math.PI * 2);
         g.fillStyle = colourFor(p, maxTRS, pal);
         g.globalAlpha = term && !match ? 0.15 : 1;
         g.fill();
@@ -382,7 +381,8 @@
     function focusOn(p) {
       if (!bounds) return;
       const { w, h } = canvasSize();
-      transform.k = Math.max(transform.k, 2.4);
+      // enough to pick the point out, not so much that context is lost
+      transform.k = Math.min(Math.max(transform.k, FOCUS_ZOOM), MAX_ZOOM);
       const sx = (p.umap1 - bounds.x0) / (bounds.x1 - bounds.x0) * w;
       const sy = h - (p.umap2 - bounds.y0) / (bounds.y1 - bounds.y0) * h;
       transform.x = w / 2 - sx * transform.k;
@@ -653,8 +653,11 @@
           </tr>`;
         }).join("");
         ui.body.querySelectorAll("tr[data-idx]").forEach((tr) => {
-          tr.addEventListener("click", () =>
-            select(tablePage[Number(tr.getAttribute("data-idx"))]));
+          tr.addEventListener("click", () => {
+            const p = tablePage[Number(tr.getAttribute("data-idx"))];
+            select(p);
+            focusOn(p);          // bring the plot to the row you picked
+          });
         });
         markSelectedRow();
       }
@@ -755,8 +758,10 @@
       e.preventDefault();
       const r = ui.canvas.getBoundingClientRect();
       const mx = e.clientX - r.left, my = e.clientY - r.top;
-      const f = e.deltaY < 0 ? 1.15 : 1 / 1.15;
-      const k = Math.max(1, Math.min(40, transform.k * f));
+      // normalised so a trackpad flick and a mouse notch behave comparably
+      const step = Math.max(-1, Math.min(1, e.deltaY / 120));
+      const f = Math.pow(ZOOM_STEP, -step);
+      const k = Math.max(1, Math.min(MAX_ZOOM, transform.k * f));
       const ratio = k / transform.k;
       transform.x = mx - (mx - transform.x) * ratio;
       transform.y = my - (my - transform.y) * ratio;

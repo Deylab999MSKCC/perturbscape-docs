@@ -36,14 +36,14 @@ Full derivation:
 
 ## Reading the plot
 
-Colour carries the score, and the scale is relative to the strongest
-perturbation in the current view — the legend shows that maximum.
+Colour and size both carry the score, on one continuous scale running from zero
+to the strongest perturbation in the current view — the legend shows that
+maximum.
 
-| Appearance | Meaning |
-|---|---|
-| Bright, saturated | High TRS, significant |
-| Faint | TRS is zero: tested but not significant |
-| Outlined, palest | UMAP coordinates exist but no enrichment result was produced |
+Because TRS is already thresholded upstream, the bottom of the scale *is* "not
+significant": a point sits there exactly when its estimate was not positive and
+significant. Anything above the floor is a scored, significant perturbation, and
+is drawn slightly larger as well as brighter.
 
 UMAP coordinates are computed **per dataset and trait**. Positions are
 meaningful only within a single plot — a point at the same coordinates in two
@@ -120,10 +120,16 @@ results are still included in **Download all** and in the bulk tables.
 | T2D | 6 | 2 | 2 | 35 |
 | TeloHAEC | 1 | 3 | 3 | 580 |
 
-Of 39,142 scored pairs, 147 have no meta-program genes recorded, and 709 UMAP
-points have no enrichment result behind them. Both are shown as what they are
-rather than hidden: a point without results is drawn palest and says so when
-selected.
+Of 39,142 scored pairs, 147 have no meta-program genes recorded.
+
+A further 709 UMAP points have no row in the results table at all. These are not
+perturbations whose meta-program failed to enrich — every row that exists in the
+results carries pathways. They are perturbations present in the UMAP
+coordinates but absent from the results table entirely, concentrated in the
+monocyte screens and dominated by HLA genes, readthrough transcripts and
+antisense RNAs, which suggests they were filtered out when the results were
+assembled. They are plotted using the score their UMAP file carries, and
+selecting one says plainly that no enrichment result is available for it.
 
 See [Datasets](datasets.md) for what each system is and what the context values
 mean.
