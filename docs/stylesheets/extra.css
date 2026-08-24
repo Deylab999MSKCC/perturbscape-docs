@@ -685,29 +685,6 @@ body, input, .md-typeset {
   background: var(--ps-surface);
   flex-wrap: wrap;
 }
-.ps-x-views {
-  display: inline-flex;
-  border: 1px solid var(--ps-border);
-  border-radius: 2px;
-  overflow: hidden;
-}
-.ps-x-view {
-  padding: .3rem .85rem;
-  font-family: var(--md-code-font-family, monospace);
-  font-size: .6rem;
-  font-weight: 600;
-  letter-spacing: .1em;
-  text-transform: uppercase;
-  color: var(--ps-muted);
-  background: transparent;
-  border: 0;
-  cursor: pointer;
-  transition: background .14s, color .14s;
-}
-.ps-x-view + .ps-x-view { border-left: 1px solid var(--ps-border); }
-.ps-x-view:hover { color: var(--ps-accent); }
-.ps-x-view.is-active { background: var(--ps-accent); color: var(--ps-base); }
-
 .ps-x-summary {
   font-family: var(--md-code-font-family, monospace);
   font-size: .63rem; color: var(--ps-muted);
@@ -749,8 +726,6 @@ body, input, .md-typeset {
 @media screen and (max-width: 68em) {
   .ps-x-stage { grid-template-columns: 1fr; }
 }
-
-.ps-x-main { position: relative; background: var(--ps-base); min-width: 0; }
 
 .ps-x-plotwrap { position: relative; height: 30rem; }
 @media screen and (max-width: 68em) { .ps-x-plotwrap { height: 22rem; } }
@@ -924,11 +899,38 @@ body, input, .md-typeset {
 }
 .ps-x-pw-bar span { display: block; height: 100%; background: var(--ps-accent); }
 
-/* ---- table view ---- */
-.ps-x-tablewrap { display: flex; flex-direction: column; height: 30rem; }
-@media screen and (max-width: 68em) { .ps-x-tablewrap { height: 22rem; } }
+/* ---- table, always below the plot ---- */
+.ps-x-tablewrap {
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--ps-border);
+  background: var(--ps-base);
+}
 
-.ps-x-scroll { flex: 1 1 auto; overflow: auto; }
+.ps-x-tablebar {
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  padding: .5rem .8rem;
+  border-bottom: 1px solid var(--ps-border);
+  background: var(--ps-surface);
+}
+.ps-x-tabletitle {
+  font-family: var(--md-code-font-family, monospace);
+  font-size: .58rem;
+  font-weight: 600;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--ps-faint);
+}
+.ps-x-tablecount {
+  font-family: var(--md-code-font-family, monospace);
+  font-size: .62rem;
+  color: var(--ps-muted);
+}
+
+.ps-x-scroll { flex: 1 1 auto; overflow: auto; max-height: 24rem; }
+@media screen and (max-width: 68em) { .ps-x-scroll { max-height: 20rem; } }
 .ps-x-table { width: 100%; border-collapse: collapse; font-size: .68rem; }
 .ps-x-table th {
   position: sticky; top: 0; z-index: 2;

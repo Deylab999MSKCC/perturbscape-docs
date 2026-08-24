@@ -55,10 +55,10 @@ different UMAPs means nothing, and distances are not comparable between plots.
 
 <div class="ps-card" markdown>
 ### Select
-Dataset, then context where one applies, then trait. **Monocytes** splits into
-knockdown and knockout, **T2D** into six differentiation stages, **PerturbAI**
-into four neuronal subclasses. The context selector hides itself for datasets
-that have only one.
+Dataset, then context where one applies, then trait. Both the plot and the
+table follow the selection. **Monocytes** splits into knockdown and knockout,
+**T2D** into six differentiation stages, **PerturbAI** into four neuronal
+subclasses. The context selector hides itself for datasets that have only one.
 </div>
 
 <div class="ps-card" markdown>
@@ -75,10 +75,11 @@ full extent. Clicking a point fills the detail panel without moving the plot.
 </div>
 
 <div class="ps-card" markdown>
-### Switch views
-**Table** shows the same selection as sortable rows with a significant-only
-filter. The detail panel is shared, so selecting a row fills it without leaving
-the table; **Show on UMAP** jumps to the plot when you want it.
+### Table
+The table below the plot lists the same selection as sortable rows, with a
+significant-only filter. Plot and table are linked: selecting in either fills
+the same detail panel, and **Centre on plot** moves the UMAP to the selected
+perturbation.
 </div>
 
 <div class="ps-card" markdown>

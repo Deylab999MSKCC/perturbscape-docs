@@ -1,8 +1,10 @@
 /* PerturbScape data explorer.
  *
- * UMAP-first view of the published results, backed by DuckDB-WASM querying the
- * Parquet tables in place. Only the byte ranges a query touches are fetched, so
- * the multi-million-row meta-program table stays usable without downloading it.
+ * A UMAP and a table of the same selection, always both on screen and linked:
+ * selecting in either fills the shared detail panel. Backed by DuckDB-WASM
+ * querying the published Parquet tables in place, so only the byte ranges a
+ * query touches are fetched and the multi-million-row meta-program table stays
+ * usable without downloading it.
  *
  * Markup:  <div class="ps-explorer" data-base="tables/"></div>
  */
@@ -130,54 +132,53 @@
 </div>
 
 <div class="ps-x-toolbar">
-  <div class="ps-x-views">
-    <button class="ps-x-view is-active" id="psx-view-umap" type="button">UMAP</button>
-    <button class="ps-x-view" id="psx-view-table" type="button">Table</button>
-  </div>
   <span class="ps-x-summary" id="psx-summary">&mdash;</span>
   <span class="ps-x-spacer"></span>
-  <label class="ps-x-check" id="psx-sig-wrap"><input type="checkbox" id="psx-sig"> Significant only</label>
   <button class="ps-x-btn" id="psx-dl-view" type="button">Download view</button>
   <button class="ps-x-btn" id="psx-dl-all" type="button">Download all</button>
 </div>
 
 <div class="ps-x-stage">
-  <div class="ps-x-main">
-    <div class="ps-x-plotwrap" id="psx-plotwrap">
-      <canvas id="psx-canvas"></canvas>
-      <div class="ps-x-tooltip" id="psx-tooltip" hidden></div>
-      <div class="ps-x-plotinfo">
-        <div class="ps-x-legend">
-          <span class="ps-x-legend-label">TRS</span>
-          <span class="ps-x-legend-bar" id="psx-legend-bar"></span>
-          <span class="ps-x-legend-max" id="psx-legend-max"></span>
-        </div>
-        <div class="ps-x-legend-keys">
-          <span><i class="ps-x-swatch ps-x-swatch--zero"></i>not significant</span>
-          <span><i class="ps-x-swatch ps-x-swatch--none"></i>no results</span>
-        </div>
+  <div class="ps-x-plotwrap" id="psx-plotwrap">
+    <canvas id="psx-canvas"></canvas>
+    <div class="ps-x-tooltip" id="psx-tooltip" hidden></div>
+    <div class="ps-x-plotinfo">
+      <div class="ps-x-legend">
+        <span class="ps-x-legend-label">TRS</span>
+        <span class="ps-x-legend-bar" id="psx-legend-bar"></span>
+        <span class="ps-x-legend-max" id="psx-legend-max"></span>
       </div>
-      <button class="ps-x-reset" id="psx-reset-view" type="button">Reset view</button>
-    </div>
-
-    <div class="ps-x-tablewrap" id="psx-tablewrap" hidden>
-      <div class="ps-x-scroll">
-        <table class="ps-x-table"><thead><tr>
-          <th data-col="perturbation">Perturbation<span class="ps-x-arrow"></span></th>
-          <th data-col="trs" class="ps-x-num">TRS<span class="ps-x-arrow"></span></th>
-          <th data-col="pvalue" class="ps-x-num">P<span class="ps-x-arrow"></span></th>
-          <th class="ps-x-nosort">Top pathways</th>
-        </tr></thead><tbody id="psx-body"></tbody></table>
-      </div>
-      <div class="ps-x-pager">
-        <button class="ps-x-btn" id="psx-prev" type="button">Prev</button>
-        <span class="ps-x-page" id="psx-page"></span>
-        <button class="ps-x-btn" id="psx-next" type="button">Next</button>
+      <div class="ps-x-legend-keys">
+        <span><i class="ps-x-swatch ps-x-swatch--zero"></i>not significant</span>
+        <span><i class="ps-x-swatch ps-x-swatch--none"></i>no results</span>
       </div>
     </div>
+    <button class="ps-x-reset" id="psx-reset-view" type="button">Reset view</button>
   </div>
 
   <aside class="ps-x-detail-panel" id="psx-detail"></aside>
+</div>
+
+<div class="ps-x-tablewrap">
+  <div class="ps-x-tablebar">
+    <span class="ps-x-tabletitle">Results</span>
+    <span class="ps-x-tablecount" id="psx-tablecount"></span>
+    <span class="ps-x-spacer"></span>
+    <label class="ps-x-check"><input type="checkbox" id="psx-sig"> Significant only</label>
+  </div>
+  <div class="ps-x-scroll">
+    <table class="ps-x-table"><thead><tr>
+      <th data-col="perturbation">Perturbation<span class="ps-x-arrow"></span></th>
+      <th data-col="trs" class="ps-x-num">TRS<span class="ps-x-arrow"></span></th>
+      <th data-col="pvalue" class="ps-x-num">P<span class="ps-x-arrow"></span></th>
+      <th class="ps-x-nosort">Top pathways</th>
+    </tr></thead><tbody id="psx-body"></tbody></table>
+  </div>
+  <div class="ps-x-pager">
+    <button class="ps-x-btn" id="psx-prev" type="button">Prev</button>
+    <span class="ps-x-page" id="psx-page"></span>
+    <button class="ps-x-btn" id="psx-next" type="button">Next</button>
+  </div>
 </div>`;
 
   function render(el, ctx) {
@@ -188,19 +189,17 @@
     const ui = {
       ds: $("psx-ds"), ctx: $("psx-ctx"), ctxField: $("psx-ctx-field"),
       trait: $("psx-trait"), pert: $("psx-pert"), suggest: $("psx-suggest"),
-      sig: $("psx-sig"), sigWrap: $("psx-sig-wrap"),
-      viewUmap: $("psx-view-umap"), viewTable: $("psx-view-table"),
-      plotwrap: $("psx-plotwrap"), tableWrap: $("psx-tablewrap"),
+      sig: $("psx-sig"),
+      plotwrap: $("psx-plotwrap"),
       canvas: $("psx-canvas"), tooltip: $("psx-tooltip"),
       detail: $("psx-detail"), summary: $("psx-summary"),
-      body: $("psx-body"), page: $("psx-page"),
+      body: $("psx-body"), page: $("psx-page"), tableCount: $("psx-tablecount"),
       prev: $("psx-prev"), next: $("psx-next"),
       dlView: $("psx-dl-view"), dlAll: $("psx-dl-all"),
       resetView: $("psx-reset-view"),
       legendBar: $("psx-legend-bar"), legendMax: $("psx-legend-max"),
     };
 
-    let view = "umap";
     let points = [];
     let maxTRS = 0;
     let selected = null;
@@ -256,6 +255,8 @@
       const d = ui.ds.value, c = ui.ctx.value, t = ui.trait.value;
       if (!d || !c || !t) return;
       ui.summary.textContent = "Loading…";
+      ui.body.innerHTML =
+        `<tr><td colspan="4" class="ps-x-empty">Loading…</td></tr>`;
 
       points = rows(await conn.query(`
         SELECT u.perturbation, u.umap1, u.umap2, u.trs,
@@ -282,6 +283,8 @@
       page = 0;
       renderDetail(null);
       draw();
+      // the table is always on screen, so it must be refreshed with the plot
+      await drawTable();
     }
 
     function computeBounds() {
@@ -382,18 +385,19 @@
 
     /* ------------------------------------------------------------- detail */
 
-    function select(p, opts) {
+    function select(p) {
       selected = p;
       renderDetail(p);
-      if (view === "umap") draw();
-      else markSelectedRow();
+      draw();
+      markSelectedRow();
     }
 
     function renderDetail(p) {
       if (!p) {
         ui.detail.innerHTML =
-          `<div class="ps-x-detail-empty">Select a perturbation to see its
-           meta-program genes and enriched pathways.</div>`;
+          `<div class="ps-x-detail-empty">Select a point on the plot, or a row in
+           the table below, to see its meta-program genes and enriched
+           pathways.</div>`;
         return;
       }
       const sig = p.pvalue != null && p.pvalue <= 0.05;
@@ -407,7 +411,7 @@
             <div><dt>TRS</dt><dd class="${sig ? "ps-x-sig" : "ps-x-nsig"}">${fmtTRS(p.trs)}</dd></div>
             <div><dt>P</dt><dd class="${sig ? "ps-x-sig" : "ps-x-nsig"}">${fmtP(p.pvalue)}</dd></div>
           </dl>
-          <button class="ps-x-locate" id="psx-locate" type="button">Show on UMAP</button>
+          <button class="ps-x-locate" id="psx-locate" type="button">Centre on plot</button>
         </div>
         <div class="ps-x-detail-body" id="psx-detail-body">
           ${p.has_result ? '<div class="ps-x-detail-empty">Loading…</div>'
@@ -415,8 +419,8 @@
         </div>`;
       const locate = el.querySelector("#psx-locate");
       if (locate) locate.addEventListener("click", () => {
-        setView("umap");
         focusOn(p);
+        ui.plotwrap.scrollIntoView({ block: "nearest", behavior: "smooth" });
       });
       if (p.has_result) loadDetail(p);
     }
@@ -539,9 +543,10 @@
       if (!p) return;
       ui.pert.value = p.perturbation;
       closeSuggest();
+      page = 0;
       select(p);
-      if (view === "umap") focusOn(p);
-      else { page = 0; drawTable(); }
+      focusOn(p);
+      drawTable();
     }
 
     /* -------------------------------------------------------------- table */
@@ -573,9 +578,15 @@
       if (page >= pages) page = pages - 1;
       tablePage = all.slice(page * PAGE, page * PAGE + PAGE);
 
+      ui.tableCount.textContent = all.length
+        ? `${all.length.toLocaleString()} row${all.length === 1 ? "" : "s"}`
+        : "no rows";
+
       if (!tablePage.length) {
         ui.body.innerHTML =
-          `<tr><td colspan="4" class="ps-x-empty">No perturbations match.</td></tr>`;
+          `<tr><td colspan="4" class="ps-x-empty">${
+            points.length ? "No perturbations match the current filters."
+                          : "No results for this selection."}</td></tr>`;
       } else {
         const names = tablePage.map((p) => q(p.perturbation)).join(",");
         const pwMap = {};
@@ -597,7 +608,6 @@
             <td><div class="ps-x-trunc">${pw ? esc(pw) : "—"}</div></td>
           </tr>`;
         }).join("");
-        // selecting a row fills the detail panel in place - the table stays put
         ui.body.querySelectorAll("tr[data-idx]").forEach((tr) => {
           tr.addEventListener("click", () =>
             select(tablePage[Number(tr.getAttribute("data-idx"))]));
@@ -675,17 +685,6 @@
 
     /* ------------------------------------------------------------- events */
 
-    function setView(v) {
-      view = v;
-      const isUmap = v === "umap";
-      ui.viewUmap.classList.toggle("is-active", isUmap);
-      ui.viewTable.classList.toggle("is-active", !isUmap);
-      ui.plotwrap.hidden = !isUmap;
-      ui.tableWrap.hidden = isUmap;
-      ui.sigWrap.style.display = isUmap ? "none" : "";
-      if (isUmap) requestAnimationFrame(draw); else drawTable();
-    }
-
     ui.canvas.addEventListener("mousemove", (e) => {
       const r = ui.canvas.getBoundingClientRect();
       const p = pick(e.clientX - r.left, e.clientY - r.top);
@@ -738,21 +737,14 @@
 
     ui.resetView.addEventListener("click", () => { resetTransform(); draw(); });
 
-    const reload = () =>
-      loadPoints().then(() => { if (view === "table") drawTable(); });
-
-    ui.ds.addEventListener("change", () => { fillContexts(); fillTraits(); reload(); });
-    ui.ctx.addEventListener("change", reload);
-    ui.trait.addEventListener("change", reload);
+    ui.ds.addEventListener("change", () => { fillContexts(); fillTraits(); loadPoints(); });
+    ui.ctx.addEventListener("change", loadPoints);
+    ui.trait.addEventListener("change", loadPoints);
 
     let t;
     ui.pert.addEventListener("input", () => {
       clearTimeout(t);
-      t = setTimeout(() => {
-        openSuggest();
-        page = 0;
-        if (view === "umap") draw(); else drawTable();
-      }, 130);
+      t = setTimeout(() => { openSuggest(); page = 0; draw(); drawTable(); }, 130);
     });
     ui.pert.addEventListener("focus", () => { if (ui.pert.value.trim()) openSuggest(); });
     ui.pert.addEventListener("blur", () => setTimeout(closeSuggest, 140));
@@ -772,8 +764,6 @@
     ui.sig.addEventListener("change", () => { page = 0; drawTable(); });
     ui.prev.addEventListener("click", () => { if (page > 0) { page--; drawTable(); } });
     ui.next.addEventListener("click", () => { page++; drawTable(); });
-    ui.viewUmap.addEventListener("click", () => setView("umap"));
-    ui.viewTable.addEventListener("click", () => setView("table"));
     ui.dlView.addEventListener("click", downloadView);
     ui.dlAll.addEventListener("click", downloadAll);
     el.querySelectorAll("th[data-col]").forEach((th) => {
@@ -788,16 +778,15 @@
     let rt;
     window.addEventListener("resize", () => {
       clearTimeout(rt);
-      rt = setTimeout(() => { if (view === "umap") draw(); }, 150);
+      rt = setTimeout(draw, 150);
     });
 
     // the plot is a canvas, so it has to be repainted when the palette flips
-    new MutationObserver(() => { paintLegend(); if (view === "umap") draw(); })
+    new MutationObserver(() => { paintLegend(); draw(); })
       .observe(document.body, { attributes: true, attributeFilter: ["data-md-color-scheme"] });
 
     fillDatasets(); fillContexts(); fillTraits();
     paintLegend();
-    setView("umap");
     renderDetail(null);
     return loadPoints();
   }
