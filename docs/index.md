@@ -28,10 +28,10 @@ disease's <strong>heritability</strong> those programs explain.
 
 <div class="ps-metrics" markdown>
 <div class="ps-metric"><span class="ps-metric-value">7</span><span class="ps-metric-label">Datasets</span></div>
-<div class="ps-metric"><span class="ps-metric-value">10,222</span><span class="ps-metric-label">Perturbations</span></div>
-<div class="ps-metric"><span class="ps-metric-value">40</span><span class="ps-metric-label">Traits</span></div>
-<div class="ps-metric"><span class="ps-metric-value">38,954</span><span class="ps-metric-label">Perturbation-trait pairs</span></div>
-<div class="ps-metric"><span class="ps-metric-value">6.9M</span><span class="ps-metric-label">Meta-program gene ranks</span></div>
+<div class="ps-metric"><span class="ps-metric-value">10,223</span><span class="ps-metric-label">Perturbations</span></div>
+<div class="ps-metric"><span class="ps-metric-value">39</span><span class="ps-metric-label">Traits</span></div>
+<div class="ps-metric"><span class="ps-metric-value">39,142</span><span class="ps-metric-label">Perturbation-trait pairs</span></div>
+<div class="ps-metric"><span class="ps-metric-value">4.0M</span><span class="ps-metric-label">Meta-program gene ranks</span></div>
 </div>
 
 ## What it does
@@ -50,7 +50,7 @@ signal for a trait. Programs are scored against GWAS gene-level statistics,
 combined into a per-perturbation meta-program, converted into SNP annotations
 through variant-to-gene links, and evaluated with stratified LD score regression.
 
-The result is a standardized effect size, tau\*, for every perturbation-trait
+The result is a **Trait Relevance Score (TRS)** for every perturbation-trait
 pair, together with the genes and pathways driving it.
 
 ```mermaid
@@ -76,7 +76,7 @@ flowchart TB
     SEL --> MP["Meta-program per perturbation"]
     MP --> ANN["Variant-to-gene annotation"]
     ANN --> LD["Stratified LD score regression"]
-    LD --> OUT["tau* per perturbation-trait pair"]
+    LD --> OUT["TRS per perturbation-trait pair"]
 ```
 
 <div class="ps-routes" markdown>
@@ -92,8 +92,8 @@ disease-enrichment methodology with the code used at each step.
 <div class="ps-route" markdown>
 <span class="ps-eyebrow">Data Portal</span>
 ### Explore the results
-Filter 38,954 perturbation-trait pairs by dataset, context, and trait. Open any
-pair to see its top 100 meta-program genes and enriched pathways.
+Explore 39,142 perturbation-trait pairs as interactive UMAPs coloured by TRS.
+Click any point for its top meta-program genes and enriched pathways.
 [Browse the data](data/index.md){ .ps-route-go }
 </div>
 
@@ -143,7 +143,8 @@ regression into a single gene ranking per perturbation and trait.
 <span class="ps-card-index">STAGE 2 / C</span>
 ### Heritability enrichment
 Top meta-program genes become SNP annotations through variant-to-gene links, and
-S-LDSC returns a standardized tau\* with a jackknife standard error.
+S-LDSC returns the standardized Trait Relevance Score with a jackknife
+standard error.
 </div>
 
 </div>

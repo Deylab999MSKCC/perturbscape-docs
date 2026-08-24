@@ -7,8 +7,8 @@ built for a SLURM cluster. It takes a Perturb-seq `.h5ad` and produces gene
 programs for every perturbation.
 
 **Stage 2 - disease enrichment** runs outside Snakemake. It takes those
-programs plus GWAS resources and produces a standardized heritability effect
-size, tau\*, for every perturbation-trait pair.
+programs plus GWAS resources and produces a **Trait Relevance Score (TRS)** -
+a standardized heritability effect size - for every perturbation-trait pair.
 
 ```mermaid
 flowchart LR
@@ -16,7 +16,7 @@ flowchart LR
         A[".h5ad"] --> B["8 modules"] --> C["Gene programs"]
     end
     subgraph S2["Stage 2 — run separately"]
-        C --> D["Program selection"] --> E["Meta-programs"] --> F["S-LDSC"] --> G["tau*"]
+        C --> D["Program selection"] --> E["Meta-programs"] --> F["S-LDSC"] --> G["TRS"]
     end
 ```
 
@@ -77,7 +77,7 @@ on the contrastive space.
 <div class="ps-card" markdown>
 ### [Disease Enrichment](methods/disease-enrichment.md)
 Program selection, meta-program construction, variant annotation, S-LDSC, and
-tau\* - with the code for each step.
+TRS - with the code for each step.
 </div>
 
 </div>

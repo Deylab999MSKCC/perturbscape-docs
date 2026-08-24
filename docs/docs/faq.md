@@ -117,7 +117,7 @@
 
 ??? question "Where is the disease enrichment code?"
     The eight Snakemake modules cover stage 1 only. Stage 2 - program selection,
-    meta-program construction, variant annotation, S-LDSC, and tau\* - runs
+    meta-program construction, variant annotation, S-LDSC, and TRS - runs
     separately and is documented step by step, with the code for each step, on
     [Disease Enrichment](methods/disease-enrichment.md). The scripts are
     adaptations of the published PoPS and sc-linker implementations and are not
@@ -132,18 +132,18 @@
 
 ## Disease enrichment
 
-??? question "What does tau\* actually measure?"
+??? question "What does TRS actually measure?"
     The per-SNP contribution to heritability of a one standard deviation increase
     in the program annotation, standardized by total trait heritability so it is
     comparable across annotations and traits. See
-    [Step 5](methods/disease-enrichment.md#step-5-tau-and-enrichment).
+    [Step 5](methods/disease-enrichment.md#step-5-trs-and-enrichment).
 
-??? question "Why are so many tau values exactly zero?"
-    They are thresholded, not estimated as zero. The published `tau` column is
+??? question "Why are so many TRS values exactly zero?"
+    They are thresholded, not estimated as zero. The published `trs` column is
     set to `0` unless the jackknife mean is positive **and** the one-sided
-    p-value is at most 0.05. Always read `tau` alongside `pvalue_tau`.
+    p-value is at most 0.05. Always read `trs` alongside `pvalue`.
 
-??? question "Is a significant tau\* evidence that the perturbation causes the trait?"
+??? question "Is a significant TRS evidence that the perturbation causes the trait?"
     No. The annotation is built from correlational variant-to-gene links and a
     gene ranking derived from GWAS signal, so a significant result says the
     perturbation's programs share genetic architecture with the trait. It is not

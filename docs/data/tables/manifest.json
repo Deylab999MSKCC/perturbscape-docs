@@ -1,10 +1,24 @@
 {
+ "score_name": "TRS",
+ "score_long_name": "Trait Relevance Score",
  "datasets": {
   "HepG2": {
    "contexts": [
     "HepG2"
    ],
    "traits": [
+    "Alanine aminotransferase",
+    "Alkaline phosphatase",
+    "Aspartate aminotransferase",
+    "Cholesterol",
+    "Gamma glutamyltransferase",
+    "HDL cholesterol",
+    "LDL direct",
+    "Lipoprotein A",
+    "Total bilirubin",
+    "Triglycerides"
+   ],
+   "umap_traits": [
     "Alanine aminotransferase",
     "Alkaline phosphatase",
     "Aspartate aminotransferase",
@@ -34,14 +48,35 @@
     "IBD",
     "Lupus",
     "Lymphocyte count",
-    "Mean Corpuscular Hemoglobin",
+    "Mean corpuscular hemoglobin",
     "Mean platelet vol.",
     "Monocyte count",
     "Multiple sclerosis",
     "Platelet count",
     "Primary biliary cirrhosis",
     "Psoriasis",
-    "Red count",
+    "Red blood cell count",
+    "Rheumatoid arthritis",
+    "Type 1 diabetes",
+    "Ulcerative colitis",
+    "White count"
+   ],
+   "umap_traits": [
+    "All auto-immune",
+    "Allergy eczema diagnosed",
+    "Alzheimers",
+    "Asthma diagnosed",
+    "Celiac",
+    "Crohn's disease",
+    "Eosinophil count",
+    "Hypothyroidism self rep.",
+    "IBD",
+    "Lupus",
+    "Lymphocyte count",
+    "Monocyte count",
+    "Multiple sclerosis",
+    "Primary biliary cirrhosis",
+    "Psoriasis",
     "Rheumatoid arthritis",
     "Type 1 diabetes",
     "Ulcerative colitis",
@@ -54,8 +89,12 @@
     "K562-GWPS"
    ],
    "traits": [
-    "Mean Corpuscular Hemoglobin",
-    "Red Blood Cell Count"
+    "Mean corpuscular hemoglobin",
+    "Red blood cell count"
+   ],
+   "umap_traits": [
+    "Mean corpuscular hemoglobin",
+    "Red blood cell count"
    ],
    "n_perturbations": 7969
   },
@@ -76,14 +115,39 @@
     "IBD",
     "Lupus",
     "Lymphocyte count",
-    "Mean Corpuscular Hemoglobin",
+    "Mean corpuscular hemoglobin",
     "Mean platelet vol.",
     "Monocyte count",
     "Multiple sclerosis",
     "Platelet count",
     "Primary biliary cirrhosis",
     "Psoriasis",
-    "Red count",
+    "Red blood cell count",
+    "Rheumatoid arthritis",
+    "Type 1 diabetes",
+    "Ulcerative colitis",
+    "White count"
+   ],
+   "umap_traits": [
+    "All auto-immune",
+    "Allergy eczema diagnosed",
+    "Alzheimers",
+    "Asthma diagnosed",
+    "Celiac",
+    "Crohn's disease",
+    "Eosinophil count",
+    "Hypothyroidism self rep.",
+    "IBD",
+    "Lupus",
+    "Lymphocyte count",
+    "Mean corpuscular hemoglobin",
+    "Mean platelet vol.",
+    "Monocyte count",
+    "Multiple sclerosis",
+    "Platelet count",
+    "Primary biliary cirrhosis",
+    "Psoriasis",
+    "Red blood cell count",
     "Rheumatoid arthritis",
     "Type 1 diabetes",
     "Ulcerative colitis",
@@ -101,28 +165,43 @@
    "traits": [
     "Autism"
    ],
+   "umap_traits": [
+    "Autism"
+   ],
    "n_perturbations": 1858
   },
   "T2D": {
    "contexts": [
+    "D11",
     "D18",
     "D18 Endo",
-    "D18 Non-endo"
+    "D18 Non-endo",
+    "D3",
+    "D7"
    ],
    "traits": [
     "HbA1C",
     "Type 2 diabetes"
    ],
-   "n_perturbations": 32
+   "umap_traits": [
+    "HbA1C",
+    "Type 2 diabetes"
+   ],
+   "n_perturbations": 35
   },
   "TeloHAEC": {
    "contexts": [
     "TeloHAEC"
    ],
    "traits": [
-    "Coronary Artery Disease",
-    "Diastolic Blood Pressure",
-    "Systolic Blood Pressure"
+    "Coronary artery disease",
+    "Diastolic blood pressure",
+    "Systolic blood pressure"
+   ],
+   "umap_traits": [
+    "Coronary artery disease",
+    "Diastolic blood pressure",
+    "Systolic blood pressure"
    ],
    "n_perturbations": 580
   }
@@ -138,9 +217,9 @@
   "Autism",
   "Celiac",
   "Cholesterol",
-  "Coronary Artery Disease",
+  "Coronary artery disease",
   "Crohn's disease",
-  "Diastolic Blood Pressure",
+  "Diastolic blood pressure",
   "Eosinophil count",
   "Gamma glutamyltransferase",
   "HDL cholesterol",
@@ -151,17 +230,16 @@
   "Lipoprotein A",
   "Lupus",
   "Lymphocyte count",
-  "Mean Corpuscular Hemoglobin",
+  "Mean corpuscular hemoglobin",
   "Mean platelet vol.",
   "Monocyte count",
   "Multiple sclerosis",
   "Platelet count",
   "Primary biliary cirrhosis",
   "Psoriasis",
-  "Red Blood Cell Count",
-  "Red count",
+  "Red blood cell count",
   "Rheumatoid arthritis",
-  "Systolic Blood Pressure",
+  "Systolic blood pressure",
   "Total bilirubin",
   "Triglycerides",
   "Type 1 diabetes",
@@ -170,14 +248,16 @@
   "White count"
  ],
  "totals": {
-  "meta_program_rows": 6919954,
-  "pathway_rows": 38954,
   "datasets": 7,
-  "traits": 40,
-  "perturbations": 10222
+  "traits": 39,
+  "perturbations": 10223,
+  "pairs": 39142,
+  "meta_program_rows": 3971637,
+  "umap_points": 38791
  },
  "files": {
-  "meta_programs.parquet": 16623891,
-  "pathways.parquet": 3438923
+  "meta_programs.parquet": 9426166,
+  "pathways.parquet": 3467519,
+  "umap.parquet": 672457
  }
 }

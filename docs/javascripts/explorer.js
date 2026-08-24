@@ -1,11 +1,10 @@
 /* PerturbScape data explorer.
  *
- * Queries the published Parquet tables in the browser with DuckDB-WASM.
- * Only the byte ranges a query touches are fetched, so the 6.9M-row
- * meta-program table stays usable without downloading it up front.
+ * UMAP-first view of the published results, backed by DuckDB-WASM querying the
+ * Parquet tables in place. Only the byte ranges a query touches are fetched, so
+ * the multi-million-row meta-program table stays usable without downloading it.
  *
- * Markup:
- *   <div class="ps-explorer" data-base="tables/"></div>
+ * Markup:  <div class="ps-explorer" data-base="tables/"></div>
  */
 (function () {
   "use strict";
@@ -13,6 +12,7 @@
   const DUCKDB = "https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.29.0/+esm";
   const PW = "pathways.parquet";
   const MP = "meta_programs.parquet";
+  const UM = "umap.parquet";
   const PAGE = 50;
 
   const esc = (s) => String(s == null ? "" : s)
@@ -20,25 +20,18 @@
     .replace(/"/g, "&quot;");
   const q = (s) => "'" + String(s).replace(/'/g, "''") + "'";
 
-  function fmtP(v) {
-    if (v == null || Number.isNaN(v)) return "—";
-    if (v === 0) return "0";
-    if (v < 1e-4) return Number(v).toExponential(1);
-    return Number(v).toFixed(4);
-  }
-  function fmtTau(v) {
-    if (v == null || Number.isNaN(v)) return "—";
-    if (v === 0) return "0";
-    return Number(v).toFixed(3);
-  }
+  const fmtP = (v) => v == null || Number.isNaN(v) ? "—"
+    : v === 0 ? "0" : v < 1e-4 ? Number(v).toExponential(1) : Number(v).toFixed(4);
+  const fmtTRS = (v) => v == null || Number.isNaN(v) ? "—"
+    : v === 0 ? "0" : Number(v).toFixed(3);
 
-  // Arrow -> plain JS rows
   function rows(result) {
     return result.toArray().map((r) => {
       const o = r.toJSON();
       for (const k in o) {
         const v = o[k];
         if (typeof v === "bigint") o[k] = Number(v);
+        else if (typeof v === "boolean") o[k] = v;
         else if (v && typeof v === "object" && typeof v.toString === "function"
                  && !(v instanceof Date)) o[k] = v.toString();
       }
@@ -46,302 +39,638 @@
     });
   }
 
+  /* ---------------------------------------------------------------- colour */
+
+  // TRS 0 means "not significant" and is deliberately dim; positive values ramp
+  // through the site accent so significant perturbations read as lit up.
+  const STOPS = [[46, 92, 122], [56, 189, 248], [165, 243, 252]];
+  const ZERO = [42, 54, 70];
+  const NO_RESULT = [30, 39, 51];
+
+  function ramp(t) {
+    t = Math.max(0, Math.min(1, t));
+    const seg = t * (STOPS.length - 1);
+    const i = Math.min(STOPS.length - 2, Math.floor(seg));
+    const f = seg - i;
+    const a = STOPS[i], b = STOPS[i + 1];
+    return [
+      Math.round(a[0] + (b[0] - a[0]) * f),
+      Math.round(a[1] + (b[1] - a[1]) * f),
+      Math.round(a[2] + (b[2] - a[2]) * f),
+    ];
+  }
+
+  const rgb = (c, alpha) => `rgba(${c[0]},${c[1]},${c[2]},${alpha == null ? 1 : alpha})`;
+
+  function colourFor(pt, maxTRS) {
+    if (!pt.has_result) return rgb(NO_RESULT, 0.55);
+    if (!pt.trs || pt.trs <= 0) return rgb(ZERO, 0.85);
+    return rgb(ramp(maxTRS > 0 ? pt.trs / maxTRS : 0));
+  }
+
+  /* ------------------------------------------------------------------ boot */
+
   async function boot(el, setStatus) {
     setStatus("Loading query engine");
     const duckdb = await import(/* webpackIgnore: true */ DUCKDB);
     const bundle = await duckdb.selectBundle(duckdb.getJsDelivrBundles());
     const workerUrl = URL.createObjectURL(
-      new Blob(['importScripts("' + bundle.mainWorker + '");'], { type: "text/javascript" })
-    );
+      new Blob(['importScripts("' + bundle.mainWorker + '");'],
+               { type: "text/javascript" }));
     const worker = new Worker(workerUrl);
     const db = new duckdb.AsyncDuckDB(new duckdb.VoidLogger(), worker);
     await db.instantiate(bundle.mainModule, bundle.pthreadWorker);
     URL.revokeObjectURL(workerUrl);
 
-    const base = new URL(el.getAttribute("data-base") || "tables/", window.location.href).href;
+    const base = new URL(el.getAttribute("data-base") || "tables/",
+                         window.location.href).href;
     setStatus("Connecting to data tables");
-    await db.registerFileURL(PW, base + PW, duckdb.DuckDBDataProtocol.HTTP, false);
-    await db.registerFileURL(MP, base + MP, duckdb.DuckDBDataProtocol.HTTP, false);
-    return db.connect();
+    for (const f of [PW, MP, UM]) {
+      await db.registerFileURL(f, base + f, duckdb.DuckDBDataProtocol.HTTP, false);
+    }
+    const conn = await db.connect();
+    const manifest = await fetch(base + "manifest.json").then((r) => r.json());
+    return { conn, manifest, base };
   }
 
-  function render(el, conn) {
-    el.innerHTML = [
-      '<div class="ps-x-filters">',
-      '  <div class="ps-x-field"><label for="psx-ds">Dataset</label>',
-      '    <select id="psx-ds"><option value="">All datasets</option></select></div>',
-      '  <div class="ps-x-field" id="psx-ctx-field"><label for="psx-ctx">Context</label>',
-      '    <select id="psx-ctx"><option value="">All contexts</option></select></div>',
-      '  <div class="ps-x-field"><label for="psx-trait">Trait</label>',
-      '    <select id="psx-trait"><option value="">All traits</option></select></div>',
-      '  <div class="ps-x-field"><label for="psx-pert">Perturbation</label>',
-      '    <input id="psx-pert" type="search" placeholder="e.g. TP53" autocomplete="off"></div>',
-      '  <div class="ps-x-field"><label for="psx-pw">Pathway contains</label>',
-      '    <input id="psx-pw" type="search" placeholder="e.g. Wnt" autocomplete="off"></div>',
-      '  <div class="ps-x-checks">',
-      '    <label class="ps-x-check"><input type="checkbox" id="psx-sig" checked> Significant only (p &le; 0.05)</label>',
-      '    <label class="ps-x-check"><input type="checkbox" id="psx-pooled"> Include pooled (All)</label>',
-      '  </div>',
-      '</div>',
-      '<div class="ps-x-toolbar">',
-      '  <span class="ps-x-summary" id="psx-summary">&mdash;</span>',
-      '  <span class="ps-x-spacer"></span>',
-      '  <button class="ps-x-btn" id="psx-reset" type="button">Reset</button>',
-      '  <button class="ps-x-btn" id="psx-dl" type="button">Download CSV</button>',
-      '</div>',
-      '<div class="ps-x-scroll"><table class="ps-x-table"><thead><tr>',
-      '  <th data-col="dataset">Dataset<span class="ps-x-arrow"></span></th>',
-      '  <th data-col="context">Context<span class="ps-x-arrow"></span></th>',
-      '  <th data-col="perturbation">Perturbation<span class="ps-x-arrow"></span></th>',
-      '  <th data-col="trait">Trait<span class="ps-x-arrow"></span></th>',
-      '  <th data-col="tau" class="ps-x-num">tau*<span class="ps-x-arrow"></span></th>',
-      '  <th data-col="pvalue_tau" class="ps-x-num">P<span class="ps-x-arrow"></span></th>',
-      '  <th class="ps-x-nosort">Top pathways</th>',
-      '</tr></thead><tbody id="psx-body"></tbody></table></div>',
-      '<div class="ps-x-pager">',
-      '  <button class="ps-x-btn" id="psx-prev" type="button">Prev</button>',
-      '  <span class="ps-x-page" id="psx-page"></span>',
-      '  <button class="ps-x-btn" id="psx-next" type="button">Next</button>',
-      '</div>',
-    ].join("\n");
+  /* ------------------------------------------------------------------- UI */
 
+  const TEMPLATE = `
+<div class="ps-x-filters">
+  <div class="ps-x-field"><label for="psx-ds">Dataset</label>
+    <select id="psx-ds"></select></div>
+  <div class="ps-x-field" id="psx-ctx-field"><label for="psx-ctx">Context</label>
+    <select id="psx-ctx"></select></div>
+  <div class="ps-x-field"><label for="psx-trait">Trait</label>
+    <select id="psx-trait"></select></div>
+  <div class="ps-x-field"><label for="psx-pert">Find perturbation</label>
+    <input id="psx-pert" type="search" placeholder="e.g. TP53" autocomplete="off"></div>
+</div>
+<div class="ps-x-toolbar">
+  <div class="ps-x-views" role="tablist">
+    <button class="ps-x-view is-active" id="psx-view-umap" type="button">UMAP</button>
+    <button class="ps-x-view" id="psx-view-table" type="button">Table</button>
+  </div>
+  <span class="ps-x-summary" id="psx-summary">&mdash;</span>
+  <span class="ps-x-spacer"></span>
+  <label class="ps-x-check" id="psx-sig-wrap"><input type="checkbox" id="psx-sig"> Significant only</label>
+  <button class="ps-x-btn" id="psx-dl-view" type="button">Download view</button>
+  <button class="ps-x-btn" id="psx-dl-all" type="button">Download all</button>
+</div>
+
+<div class="ps-x-stage" id="psx-stage">
+  <div class="ps-x-plotwrap">
+    <canvas id="psx-canvas"></canvas>
+    <div class="ps-x-tooltip" id="psx-tooltip" hidden></div>
+    <div class="ps-x-plotinfo">
+      <div class="ps-x-legend">
+        <span class="ps-x-legend-label">TRS</span>
+        <span class="ps-x-legend-bar" id="psx-legend-bar"></span>
+        <span class="ps-x-legend-max" id="psx-legend-max"></span>
+      </div>
+      <div class="ps-x-legend-keys">
+        <span><i class="ps-x-swatch ps-x-swatch--zero"></i>not significant</span>
+        <span><i class="ps-x-swatch ps-x-swatch--none"></i>no results</span>
+      </div>
+    </div>
+    <button class="ps-x-reset" id="psx-reset-view" type="button">Reset view</button>
+  </div>
+  <aside class="ps-x-detail-panel" id="psx-detail"></aside>
+</div>
+
+<div class="ps-x-tablewrap" id="psx-tablewrap" hidden>
+  <div class="ps-x-scroll">
+    <table class="ps-x-table"><thead><tr>
+      <th data-col="perturbation">Perturbation<span class="ps-x-arrow"></span></th>
+      <th data-col="trait">Trait<span class="ps-x-arrow"></span></th>
+      <th data-col="trs" class="ps-x-num">TRS<span class="ps-x-arrow"></span></th>
+      <th data-col="pvalue" class="ps-x-num">P<span class="ps-x-arrow"></span></th>
+      <th class="ps-x-nosort">Top pathways</th>
+    </tr></thead><tbody id="psx-body"></tbody></table>
+  </div>
+  <div class="ps-x-pager">
+    <button class="ps-x-btn" id="psx-prev" type="button">Prev</button>
+    <span class="ps-x-page" id="psx-page"></span>
+    <button class="ps-x-btn" id="psx-next" type="button">Next</button>
+  </div>
+</div>`;
+
+  function render(el, ctx) {
+    const { conn, manifest } = ctx;
+    el.innerHTML = TEMPLATE;
     const $ = (id) => el.querySelector("#" + id);
+
     const ui = {
       ds: $("psx-ds"), ctx: $("psx-ctx"), ctxField: $("psx-ctx-field"),
-      trait: $("psx-trait"), pert: $("psx-pert"), pw: $("psx-pw"),
-      sig: $("psx-sig"), pooled: $("psx-pooled"),
-      summary: $("psx-summary"), body: $("psx-body"), page: $("psx-page"),
+      trait: $("psx-trait"), pert: $("psx-pert"), sig: $("psx-sig"),
+      sigWrap: $("psx-sig-wrap"),
+      viewUmap: $("psx-view-umap"), viewTable: $("psx-view-table"),
+      stage: $("psx-stage"), tableWrap: $("psx-tablewrap"),
+      canvas: $("psx-canvas"), tooltip: $("psx-tooltip"),
+      detail: $("psx-detail"), summary: $("psx-summary"),
+      body: $("psx-body"), page: $("psx-page"),
       prev: $("psx-prev"), next: $("psx-next"),
-      reset: $("psx-reset"), dl: $("psx-dl"),
+      dlView: $("psx-dl-view"), dlAll: $("psx-dl-all"),
+      resetView: $("psx-reset-view"),
+      legendBar: $("psx-legend-bar"), legendMax: $("psx-legend-max"),
     };
 
-    let sortCol = "pvalue_tau", sortAsc = true, page = 0, total = 0, openKey = null;
+    let view = "umap";
+    let points = [];          // current umap selection
+    let maxTRS = 0;
+    let selected = null;
+    let hovered = null;
+    let transform = { k: 1, x: 0, y: 0 };
+    let bounds = null;
+    let sortCol = "pvalue", sortAsc = true, page = 0;
 
-    function where() {
-      const c = [];
-      if (ui.ds.value) c.push("dataset = " + q(ui.ds.value));
-      if (ui.ctx.value) c.push("context = " + q(ui.ctx.value));
-      if (ui.trait.value) c.push("trait = " + q(ui.trait.value));
-      const p = ui.pert.value.trim();
-      if (p) c.push("perturbation ILIKE " + q("%" + p + "%"));
-      const w = ui.pw.value.trim();
-      if (w) c.push("pathways ILIKE " + q("%" + w + "%"));
-      if (ui.sig.checked) c.push("pvalue_tau <= 0.05");
-      if (!ui.pooled.checked) c.push("lower(perturbation) NOT IN ('all','pooled')");
-      return c.length ? "WHERE " + c.join(" AND ") : "";
+    ui.legendBar.style.background =
+      `linear-gradient(90deg, ${rgb(STOPS[0])}, ${rgb(STOPS[1])}, ${rgb(STOPS[2])})`;
+
+    /* ---------------------------------------------------------- selectors */
+
+    function datasetsWithUmap() {
+      return Object.keys(manifest.datasets)
+        .filter((d) => (manifest.datasets[d].umap_traits || []).length)
+        .sort();
     }
 
-    async function fillFacets() {
-      const dsRows = rows(await conn.query(
-        "SELECT DISTINCT dataset FROM '" + PW + "' ORDER BY dataset"));
-      ui.ds.innerHTML = '<option value="">All datasets</option>' +
-        dsRows.map((r) => "<option>" + esc(r.dataset) + "</option>").join("");
-      await fillDependent();
+    function fillDatasets() {
+      const list = datasetsWithUmap();
+      ui.ds.innerHTML = list.map((d) => `<option>${esc(d)}</option>`).join("");
+      ui.ds.value = list[0];
     }
 
-    async function fillDependent() {
-      const dsClause = ui.ds.value ? "WHERE dataset = " + q(ui.ds.value) : "";
-      const [ctxRows, trRows] = await Promise.all([
-        conn.query("SELECT DISTINCT context, dataset FROM '" + PW + "' " + dsClause + " ORDER BY context"),
-        conn.query("SELECT DISTINCT trait FROM '" + PW + "' " + dsClause + " ORDER BY trait"),
+    // D3 / D7 / D11 must not sort as D11 / D3 / D7
+    const natural = (a, b) => String(a).localeCompare(String(b), undefined, { numeric: true });
+
+    function fillContexts() {
+      const info = manifest.datasets[ui.ds.value] || { contexts: [] };
+      const real = info.contexts.filter((c) => c !== ui.ds.value).slice().sort(natural);
+      ui.ctxField.style.display = real.length ? "" : "none";
+      const opts = real.length ? real : info.contexts;
+      const keep = ui.ctx.value;
+      ui.ctx.innerHTML = opts.map((c) => `<option>${esc(c)}</option>`).join("");
+      ui.ctx.value = opts.includes(keep) ? keep : opts[0];
+    }
+
+    function fillTraits() {
+      const info = manifest.datasets[ui.ds.value] || {};
+      const traits = info.umap_traits || [];
+      const keep = ui.trait.value;
+      ui.trait.innerHTML = traits.map((t) => `<option>${esc(t)}</option>`).join("");
+      ui.trait.value = traits.includes(keep) ? keep : traits[0];
+    }
+
+    /* --------------------------------------------------------- data loads */
+
+    async function loadPoints() {
+      const d = ui.ds.value, c = ui.ctx.value, t = ui.trait.value;
+      if (!d || !c || !t) return;
+      ui.summary.textContent = "Loading…";
+
+      points = rows(await conn.query(`
+        SELECT u.perturbation, u.umap1, u.umap2, u.trs,
+               (p.perturbation IS NOT NULL) AS has_result,
+               p.pvalue AS pvalue
+        FROM '${UM}' u
+        LEFT JOIN '${PW}' p
+          ON u.dataset = p.dataset AND u.context = p.context
+         AND u.perturbation = p.perturbation AND u.trait = p.trait
+        WHERE u.dataset = ${q(d)} AND u.context = ${q(c)} AND u.trait = ${q(t)}
+      `));
+
+      maxTRS = points.reduce((m, p) => Math.max(m, p.trs || 0), 0);
+      ui.legendMax.textContent = maxTRS ? maxTRS.toFixed(2) : "";
+
+      const nSig = points.filter((p) => p.pvalue != null && p.pvalue <= 0.05).length;
+      const nNo = points.filter((p) => !p.has_result).length;
+      ui.summary.innerHTML =
+        `<b>${points.length.toLocaleString()}</b> perturbations · ` +
+        `<b>${nSig.toLocaleString()}</b> significant` +
+        (nNo ? ` · ${nNo.toLocaleString()} without results` : "");
+
+      computeBounds();
+      resetTransform();
+      selected = null;
+      renderDetail(null);
+      draw();
+    }
+
+    function computeBounds() {
+      if (!points.length) { bounds = null; return; }
+      let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+      for (const p of points) {
+        if (p.umap1 < x0) x0 = p.umap1;
+        if (p.umap1 > x1) x1 = p.umap1;
+        if (p.umap2 < y0) y0 = p.umap2;
+        if (p.umap2 > y1) y1 = p.umap2;
+      }
+      const padX = (x1 - x0) * 0.06 || 1, padY = (y1 - y0) * 0.06 || 1;
+      bounds = { x0: x0 - padX, x1: x1 + padX, y0: y0 - padY, y1: y1 + padY };
+    }
+
+    const resetTransform = () => { transform = { k: 1, x: 0, y: 0 }; };
+
+    /* -------------------------------------------------------------- canvas */
+
+    function canvasSize() {
+      const r = ui.canvas.getBoundingClientRect();
+      return { w: Math.max(1, r.width), h: Math.max(1, r.height) };
+    }
+
+    function project(p) {
+      const { w, h } = canvasSize();
+      const sx = (p.umap1 - bounds.x0) / (bounds.x1 - bounds.x0) * w;
+      // flip y so the plot reads the same way round as ggplot output
+      const sy = h - (p.umap2 - bounds.y0) / (bounds.y1 - bounds.y0) * h;
+      return { x: sx * transform.k + transform.x, y: sy * transform.k + transform.y };
+    }
+
+    function draw() {
+      const canvas = ui.canvas;
+      const { w, h } = canvasSize();
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = Math.round(w * dpr);
+      canvas.height = Math.round(h * dpr);
+      const g = canvas.getContext("2d");
+      g.setTransform(dpr, 0, 0, dpr, 0, 0);
+      g.clearRect(0, 0, w, h);
+      if (!bounds || !points.length) return;
+
+      const term = ui.pert.value.trim().toLowerCase();
+      const r = 3.1 * Math.min(2.2, Math.max(0.75, transform.k));
+
+      // dim first, lit second, so significant points are never buried
+      const order = points.slice().sort((a, b) => (a.trs || 0) - (b.trs || 0));
+      for (const p of order) {
+        const s = project(p);
+        if (s.x < -20 || s.y < -20 || s.x > w + 20 || s.y > h + 20) continue;
+        const match = term && p.perturbation.toLowerCase().includes(term);
+        g.beginPath();
+        g.arc(s.x, s.y, match ? r * 1.7 : r, 0, Math.PI * 2);
+        g.fillStyle = colourFor(p, maxTRS);
+        g.globalAlpha = term && !match ? 0.18 : 1;
+        g.fill();
+        if (match) {
+          g.globalAlpha = 1;
+          g.lineWidth = 1.2;
+          g.strokeStyle = "#A5F3FC";
+          g.stroke();
+        }
+      }
+      g.globalAlpha = 1;
+
+      for (const p of [hovered, selected]) {
+        if (!p) continue;
+        const s = project(p);
+        g.beginPath();
+        g.arc(s.x, s.y, r + 4.5, 0, Math.PI * 2);
+        g.lineWidth = p === selected ? 2 : 1.2;
+        g.strokeStyle = p === selected ? "#A5F3FC" : "#8B9BAF";
+        g.stroke();
+      }
+    }
+
+    function pick(mx, my) {
+      if (!bounds) return null;
+      let best = null, bestD = 12 * 12;
+      for (const p of points) {
+        const s = project(p);
+        const d = (s.x - mx) ** 2 + (s.y - my) ** 2;
+        if (d < bestD) { bestD = d; best = p; }
+      }
+      return best;
+    }
+
+    /* ------------------------------------------------------------- detail */
+
+    function renderDetail(p) {
+      if (!p) {
+        ui.detail.innerHTML =
+          `<div class="ps-x-detail-empty">Select a point to see its
+           meta-program genes and enriched pathways.</div>`;
+        return;
+      }
+      const sig = p.pvalue != null && p.pvalue <= 0.05;
+      ui.detail.innerHTML = `
+        <div class="ps-x-detail-head">
+          <span class="ps-x-detail-eyebrow">${esc(ui.ds.value)}${
+            ui.ctx.value !== ui.ds.value ? " · " + esc(ui.ctx.value) : ""}</span>
+          <h3>${esc(p.perturbation)}</h3>
+          <p class="ps-x-detail-trait">${esc(ui.trait.value)}</p>
+          <dl class="ps-x-stats">
+            <div><dt>TRS</dt><dd class="${sig ? "ps-x-sig" : "ps-x-nsig"}">${fmtTRS(p.trs)}</dd></div>
+            <div><dt>P</dt><dd class="${sig ? "ps-x-sig" : "ps-x-nsig"}">${fmtP(p.pvalue)}</dd></div>
+          </dl>
+        </div>
+        <div class="ps-x-detail-body" id="psx-detail-body">
+          ${p.has_result ? '<div class="ps-x-detail-empty">Loading…</div>'
+            : '<div class="ps-x-detail-empty">No enrichment results were produced for this perturbation and trait.</div>'}
+        </div>`;
+      if (p.has_result) loadDetail(p);
+    }
+
+    async function loadDetail(p) {
+      const d = ui.ds.value, c = ui.ctx.value, t = ui.trait.value;
+      const where = `dataset = ${q(d)} AND context = ${q(c)} ` +
+                    `AND perturbation = ${q(p.perturbation)} AND trait = ${q(t)}`;
+      const [pwRows, genes] = await Promise.all([
+        conn.query(`SELECT pathways, neglog10p_pathways FROM '${PW}' WHERE ${where} LIMIT 1`),
+        conn.query(`SELECT gene, rank FROM '${MP}' WHERE ${where} ORDER BY rank LIMIT 100`),
       ]);
-      // a context that just repeats the dataset name carries no information
-      const ctxs = rows(ctxRows).filter((r) => r.context !== r.dataset);
-      ui.ctxField.style.display = ctxs.length ? "" : "none";
-      const keepCtx = ui.ctx.value;
-      ui.ctx.innerHTML = '<option value="">All contexts</option>' +
-        ctxs.map((r) => "<option>" + esc(r.context) + "</option>").join("");
-      if (ctxs.some((r) => r.context === keepCtx)) ui.ctx.value = keepCtx;
-
-      const traits = rows(trRows);
-      const keepTrait = ui.trait.value;
-      ui.trait.innerHTML = '<option value="">All traits</option>' +
-        traits.map((r) => "<option>" + esc(r.trait) + "</option>").join("");
-      if (traits.some((r) => r.trait === keepTrait)) ui.trait.value = keepTrait;
-    }
-
-    function pathwayCell(pw) {
-      if (!pw) return '<span class="ps-x-nsig">&mdash;</span>';
-      const first = pw.split(";").slice(0, 3).map((s) => s.trim()).filter(Boolean);
-      return '<div class="ps-x-trunc">' + esc(first.join(" · ")) + "</div>";
-    }
-
-    async function draw() {
-      ui.body.innerHTML = '<tr><td colspan="7" class="ps-x-empty">Querying…</td></tr>';
-      const w = where();
-      const cnt = rows(await conn.query("SELECT count(*) AS n FROM '" + PW + "' " + w));
-      total = cnt[0].n;
-
-      const order = "ORDER BY " + sortCol + " " + (sortAsc ? "ASC" : "DESC") + " NULLS LAST";
-      const data = rows(await conn.query(
-        "SELECT dataset, context, perturbation, trait, tau, pvalue_tau, " +
-        "pathways, neglog10p_pathways FROM '" + PW + "' " + w + " " + order +
-        " LIMIT " + PAGE + " OFFSET " + (page * PAGE)));
-
-      ui.summary.innerHTML = "<b>" + total.toLocaleString() + "</b> perturbation–trait pairs";
-      const pages = Math.max(1, Math.ceil(total / PAGE));
-      ui.page.textContent = "Page " + (page + 1) + " of " + pages.toLocaleString();
-      ui.prev.disabled = page === 0;
-      ui.next.disabled = page >= pages - 1;
-
-      if (!data.length) {
-        ui.body.innerHTML = '<tr><td colspan="7" class="ps-x-empty">' +
-          "No perturbation–trait pairs match these filters.</td></tr>";
-        return;
-      }
-
-      ui.body.innerHTML = data.map((r, i) => {
-        const sig = r.pvalue_tau != null && r.pvalue_tau <= 0.05;
-        const ctx = r.context === r.dataset
-          ? '<span class="ps-x-nsig">&mdash;</span>' : esc(r.context);
-        return '<tr data-idx="' + i + '">' +
-          '<td class="ps-x-mono">' + esc(r.dataset) + "</td>" +
-          "<td>" + ctx + "</td>" +
-          '<td class="ps-x-mono"><b>' + esc(r.perturbation) + "</b></td>" +
-          "<td>" + esc(r.trait) + "</td>" +
-          '<td class="ps-x-num ' + (sig ? "ps-x-sig" : "ps-x-nsig") + '">' + fmtTau(r.tau) + "</td>" +
-          '<td class="ps-x-num ' + (sig ? "ps-x-sig" : "ps-x-nsig") + '">' + fmtP(r.pvalue_tau) + "</td>" +
-          "<td>" + pathwayCell(r.pathways) + "</td></tr>";
-      }).join("");
-
-      ui.body.querySelectorAll("tr[data-idx]").forEach((tr) => {
-        const row = data[Number(tr.getAttribute("data-idx"))];
-        tr.addEventListener("click", () => toggle(tr, row));
-        if (openKey && keyOf(row) === openKey) toggle(tr, row, true);
-      });
-    }
-
-    const keyOf = (r) => JSON.stringify([r.dataset, r.context, r.perturbation, r.trait]);
-
-    async function toggle(tr, row, keepOpen) {
-      const next = tr.nextElementSibling;
-      if (next && next.classList.contains("ps-x-detail")) {
-        if (keepOpen) return;
-        next.remove();
-        tr.classList.remove("ps-x-open");
-        openKey = null;
-        return;
-      }
-      ui.body.querySelectorAll(".ps-x-detail").forEach((n) => n.remove());
-      ui.body.querySelectorAll(".ps-x-open").forEach((n) => n.classList.remove("ps-x-open"));
-      tr.classList.add("ps-x-open");
-      openKey = keyOf(row);
-
-      const detail = document.createElement("tr");
-      detail.className = "ps-x-detail";
-      detail.innerHTML = '<td colspan="7"><div class="ps-x-detail-inner">' +
-        '<div class="ps-x-panel"><h4>Top meta-program genes</h4>' +
-        '<div class="ps-x-genes" data-genes>Loading…</div></div>' +
-        '<div class="ps-x-panel"><h4>Enriched pathways</h4>' +
-        '<div class="ps-x-pathways">' + pathwayPanel(row) + "</div></div>" +
-        "</div></td>";
-      tr.after(detail);
-
-      const genes = rows(await conn.query(
-        "SELECT gene, rank FROM '" + MP + "' WHERE dataset = " + q(row.dataset) +
-        " AND context = " + q(row.context) + " AND perturbation = " + q(row.perturbation) +
-        " AND trait = " + q(row.trait) + " ORDER BY rank LIMIT 100"));
-      const box = detail.querySelector("[data-genes]");
-      box.innerHTML = genes.length
-        ? genes.map((g, i) =>
-            '<span class="ps-x-gene ' + (i < 10 ? "ps-x-gene--top" : "") + '">' +
-            esc(g.gene) + '<span class="ps-x-rank">' + Math.round(g.rank) + "</span></span>"
-          ).join("")
-        : '<span class="ps-x-nsig">No meta-program genes recorded for this pair.</span>';
+      if (selected !== p) return;   // selection moved on while we waited
+      const box = el.querySelector("#psx-detail-body");
+      if (!box) return;
+      const pw = rows(pwRows)[0] || {};
+      const gs = rows(genes);
+      box.innerHTML = `
+        <section><h4>Top meta-program genes</h4>
+          <div class="ps-x-genes">${
+            gs.length ? gs.map((g, i) =>
+              `<span class="ps-x-gene ${i < 10 ? "ps-x-gene--top" : ""}">${
+                esc(g.gene)}<span class="ps-x-rank">${Math.round(g.rank)}</span></span>`
+            ).join("")
+            : '<span class="ps-x-nsig">No meta-program genes recorded.</span>'}
+          </div></section>
+        <section><h4>Enriched pathways</h4>
+          <div class="ps-x-pathways">${pathwayPanel(pw)}</div></section>`;
     }
 
     function pathwayPanel(row) {
-      if (!row || !row.pathways) return '<span class="ps-x-nsig">No enriched pathways.</span>';
+      if (!row || !row.pathways)
+        return '<span class="ps-x-nsig">No enriched pathways.</span>';
       const names = row.pathways.split(";").map((s) => s.trim()).filter(Boolean);
-      const vals = (row.neglog10p_pathways || "").split(";").map((s) => parseFloat(s.trim()));
+      const vals = (row.neglog10p_pathways || "").split(";")
+        .map((s) => parseFloat(s.trim()));
       const finite = vals.filter((v) => !Number.isNaN(v));
       const max = finite.length ? Math.max.apply(null, finite) : 1;
       return names.map((n, i) => {
         const v = vals[i];
         const pct = Number.isNaN(v) ? 0 : Math.round((v / max) * 100);
-        return '<div class="ps-x-pw">' +
-          '<span class="ps-x-pw-name">' + esc(n) + "</span>" +
-          '<span class="ps-x-pw-val">' + (Number.isNaN(v) ? "—" : v.toFixed(2)) + "</span>" +
-          '<span class="ps-x-pw-bar"><span style="width:' + pct + '%"></span></span></div>';
+        return `<div class="ps-x-pw">
+          <span class="ps-x-pw-name">${esc(n)}</span>
+          <span class="ps-x-pw-val">${Number.isNaN(v) ? "—" : v.toFixed(2)}</span>
+          <span class="ps-x-pw-bar"><span style="width:${pct}%"></span></span>
+        </div>`;
       }).join("");
     }
 
-    async function download() {
-      ui.dl.disabled = true;
-      const old = ui.dl.textContent;
-      ui.dl.textContent = "Preparing…";
-      try {
-        const data = rows(await conn.query(
-          "SELECT dataset, context, perturbation, trait, tau, pvalue_tau, " +
-          "pathways, neglog10p_pathways FROM '" + PW + "' " + where() +
-          " ORDER BY " + sortCol + " " + (sortAsc ? "ASC" : "DESC") + " NULLS LAST"));
-        const cols = ["dataset", "context", "perturbation", "trait", "tau",
-                      "pvalue_tau", "pathways", "neglog10p_pathways"];
-        const cell = (v) => {
-          const s = v == null ? "" : String(v);
-          return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
-        };
-        const csv = [cols.join(",")]
-          .concat(data.map((r) => cols.map((c) => cell(r[c])).join(","))).join("\n");
-        const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = "perturbscape_perturbation_trait.csv";
-        document.body.appendChild(a); a.click(); a.remove();
-        setTimeout(() => URL.revokeObjectURL(url), 1500);
-      } finally {
-        ui.dl.disabled = false;
-        ui.dl.textContent = old;
-      }
+    /* -------------------------------------------------------------- table */
+
+    function tableRows() {
+      const term = ui.pert.value.trim().toLowerCase();
+      let list = points.filter((p) => p.has_result);
+      if (ui.sig.checked) list = list.filter((p) => p.pvalue != null && p.pvalue <= 0.05);
+      if (term) list = list.filter((p) => p.perturbation.toLowerCase().includes(term));
+      const dir = sortAsc ? 1 : -1;
+      return list.sort((a, b) => {
+        const x = a[sortCol], y = b[sortCol];
+        if (typeof x === "number" || typeof y === "number")
+          return ((x == null ? Infinity : x) - (y == null ? Infinity : y)) * dir;
+        return String(x).localeCompare(String(y), undefined, { numeric: true }) * dir;
+      });
     }
 
-    function markSort() {
+    let tableCache = [];
+
+    async function drawTable() {
+      tableCache = tableRows();
+      const pages = Math.max(1, Math.ceil(tableCache.length / PAGE));
+      if (page >= pages) page = pages - 1;
+      const slice = tableCache.slice(page * PAGE, page * PAGE + PAGE);
+
+      if (!slice.length) {
+        ui.body.innerHTML =
+          `<tr><td colspan="5" class="ps-x-empty">No perturbations match.</td></tr>`;
+      } else {
+        // pathway text is only needed for the visible page
+        const names = slice.map((p) => q(p.perturbation)).join(",");
+        const pwMap = {};
+        if (names) {
+          const res = rows(await conn.query(`
+            SELECT perturbation, pathways FROM '${PW}'
+            WHERE dataset = ${q(ui.ds.value)} AND context = ${q(ui.ctx.value)}
+              AND trait = ${q(ui.trait.value)} AND perturbation IN (${names})`));
+          for (const r of res) pwMap[r.perturbation] = r.pathways;
+        }
+        ui.body.innerHTML = slice.map((p, i) => {
+          const sig = p.pvalue != null && p.pvalue <= 0.05;
+          const pw = (pwMap[p.perturbation] || "").split(";")
+            .slice(0, 3).map((s) => s.trim()).filter(Boolean).join(" · ");
+          return `<tr data-idx="${i}">
+            <td class="ps-x-mono"><b>${esc(p.perturbation)}</b></td>
+            <td>${esc(ui.trait.value)}</td>
+            <td class="ps-x-num ${sig ? "ps-x-sig" : "ps-x-nsig"}">${fmtTRS(p.trs)}</td>
+            <td class="ps-x-num ${sig ? "ps-x-sig" : "ps-x-nsig"}">${fmtP(p.pvalue)}</td>
+            <td><div class="ps-x-trunc">${pw ? esc(pw) : "—"}</div></td>
+          </tr>`;
+        }).join("");
+        ui.body.querySelectorAll("tr[data-idx]").forEach((tr) => {
+          tr.addEventListener("click", () => {
+            const p = slice[Number(tr.getAttribute("data-idx"))];
+            selected = p;
+            setView("umap");
+            focusOn(p);
+            renderDetail(p);
+          });
+        });
+      }
+      ui.page.textContent = `Page ${page + 1} of ${pages.toLocaleString()}`;
+      ui.prev.disabled = page === 0;
+      ui.next.disabled = page >= pages - 1;
       el.querySelectorAll("th[data-col]").forEach((th) => {
         const a = th.querySelector(".ps-x-arrow");
-        if (!a) return;
-        a.textContent = th.getAttribute("data-col") === sortCol
+        if (a) a.textContent = th.getAttribute("data-col") === sortCol
           ? (sortAsc ? " ▲" : " ▼") : "";
       });
     }
 
-    let t;
-    const reload = () => { page = 0; openKey = null; draw(); };
-    const debounced = () => { clearTimeout(t); t = setTimeout(reload, 220); };
+    function focusOn(p) {
+      const { w, h } = canvasSize();
+      transform.k = Math.max(transform.k, 2.4);
+      const sx = (p.umap1 - bounds.x0) / (bounds.x1 - bounds.x0) * w;
+      const sy = h - (p.umap2 - bounds.y0) / (bounds.y1 - bounds.y0) * h;
+      transform.x = w / 2 - sx * transform.k;
+      transform.y = h / 2 - sy * transform.k;
+      draw();
+    }
 
-    ui.ds.addEventListener("change", async () => { await fillDependent(); reload(); });
-    ui.ctx.addEventListener("change", reload);
-    ui.trait.addEventListener("change", reload);
-    ui.pert.addEventListener("input", debounced);
-    ui.pw.addEventListener("input", debounced);
-    ui.sig.addEventListener("change", reload);
-    ui.pooled.addEventListener("change", reload);
-    ui.prev.addEventListener("click", () => { if (page > 0) { page--; openKey = null; draw(); } });
-    ui.next.addEventListener("click", () => { page++; openKey = null; draw(); });
-    ui.dl.addEventListener("click", download);
-    ui.reset.addEventListener("click", async () => {
-      ui.ds.value = ""; ui.ctx.value = ""; ui.trait.value = "";
-      ui.pert.value = ""; ui.pw.value = "";
-      ui.sig.checked = true; ui.pooled.checked = false;
-      sortCol = "pvalue_tau"; sortAsc = true;
-      await fillDependent(); markSort(); reload();
+    /* ---------------------------------------------------------- downloads */
+
+    const csvCell = (v) => {
+      const s = v == null ? "" : String(v);
+      return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+    };
+
+    function saveCSV(name, cols, data) {
+      const csv = [cols.join(",")]
+        .concat(data.map((r) => cols.map((c) => csvCell(r[c])).join(","))).join("\n");
+      const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+      const a = document.createElement("a");
+      a.href = url; a.download = name;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1500);
+    }
+
+    async function downloadView() {
+      const btn = ui.dlView, old = btn.textContent;
+      btn.disabled = true; btn.textContent = "Preparing…";
+      try {
+        const list = tableRows();
+        const names = list.map((p) => q(p.perturbation));
+        let pwMap = {};
+        for (let i = 0; i < names.length; i += 800) {
+          const chunk = names.slice(i, i + 800).join(",");
+          const res = rows(await conn.query(`
+            SELECT perturbation, pathways, neglog10p_pathways FROM '${PW}'
+            WHERE dataset = ${q(ui.ds.value)} AND context = ${q(ui.ctx.value)}
+              AND trait = ${q(ui.trait.value)} AND perturbation IN (${chunk})`));
+          for (const r of res) pwMap[r.perturbation] = r;
+        }
+        const data = list.map((p) => ({
+          dataset: ui.ds.value, context: ui.ctx.value, trait: ui.trait.value,
+          perturbation: p.perturbation, trs: p.trs, pvalue: p.pvalue,
+          umap1: p.umap1, umap2: p.umap2,
+          pathways: (pwMap[p.perturbation] || {}).pathways,
+          neglog10p_pathways: (pwMap[p.perturbation] || {}).neglog10p_pathways,
+        }));
+        saveCSV(
+          `perturbscape_${ui.ds.value}_${ui.trait.value}`.replace(/[^\w-]+/g, "_") + ".csv",
+          ["dataset", "context", "trait", "perturbation", "trs", "pvalue",
+           "umap1", "umap2", "pathways", "neglog10p_pathways"], data);
+      } finally { btn.disabled = false; btn.textContent = old; }
+    }
+
+    async function downloadAll() {
+      const btn = ui.dlAll, old = btn.textContent;
+      btn.disabled = true; btn.textContent = "Preparing…";
+      try {
+        const data = rows(await conn.query(`
+          SELECT dataset, context, perturbation, trait, trs, pvalue,
+                 pathways, neglog10p_pathways
+          FROM '${PW}' ORDER BY dataset, trait, pvalue`));
+        saveCSV("perturbscape_all_results.csv",
+          ["dataset", "context", "perturbation", "trait", "trs", "pvalue",
+           "pathways", "neglog10p_pathways"], data);
+      } finally { btn.disabled = false; btn.textContent = old; }
+    }
+
+    /* ------------------------------------------------------------- events */
+
+    function setView(v) {
+      view = v;
+      const isUmap = v === "umap";
+      ui.viewUmap.classList.toggle("is-active", isUmap);
+      ui.viewTable.classList.toggle("is-active", !isUmap);
+      ui.stage.hidden = !isUmap;
+      ui.tableWrap.hidden = isUmap;
+      ui.sigWrap.style.display = isUmap ? "none" : "";
+      if (isUmap) requestAnimationFrame(draw); else drawTable();
+    }
+
+    ui.canvas.addEventListener("mousemove", (e) => {
+      const r = ui.canvas.getBoundingClientRect();
+      const p = pick(e.clientX - r.left, e.clientY - r.top);
+      if (p !== hovered) { hovered = p; draw(); }
+      if (p) {
+        ui.tooltip.hidden = false;
+        ui.tooltip.innerHTML =
+          `<b>${esc(p.perturbation)}</b><span>TRS ${fmtTRS(p.trs)}` +
+          (p.has_result ? ` · P ${fmtP(p.pvalue)}` : " · no results") + `</span>`;
+        const s = project(p);
+        ui.tooltip.style.left = s.x + "px";
+        ui.tooltip.style.top = (s.y - 12) + "px";
+      } else ui.tooltip.hidden = true;
     });
+    ui.canvas.addEventListener("mouseleave", () => {
+      hovered = null; ui.tooltip.hidden = true; draw();
+    });
+    ui.canvas.addEventListener("click", (e) => {
+      const r = ui.canvas.getBoundingClientRect();
+      const p = pick(e.clientX - r.left, e.clientY - r.top);
+      if (!p) return;
+      selected = p; renderDetail(p); draw();
+    });
+    ui.canvas.addEventListener("wheel", (e) => {
+      e.preventDefault();
+      const r = ui.canvas.getBoundingClientRect();
+      const mx = e.clientX - r.left, my = e.clientY - r.top;
+      const f = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+      const k = Math.max(1, Math.min(40, transform.k * f));
+      const ratio = k / transform.k;
+      transform.x = mx - (mx - transform.x) * ratio;
+      transform.y = my - (my - transform.y) * ratio;
+      transform.k = k;
+      draw();
+    }, { passive: false });
+
+    let dragging = null;
+    ui.canvas.addEventListener("mousedown", (e) => {
+      dragging = { x: e.clientX, y: e.clientY, tx: transform.x, ty: transform.y };
+      ui.canvas.classList.add("is-dragging");
+    });
+    window.addEventListener("mousemove", (e) => {
+      if (!dragging) return;
+      transform.x = dragging.tx + (e.clientX - dragging.x);
+      transform.y = dragging.ty + (e.clientY - dragging.y);
+      draw();
+    });
+    window.addEventListener("mouseup", () => {
+      dragging = null; ui.canvas.classList.remove("is-dragging");
+    });
+
+    ui.resetView.addEventListener("click", () => { resetTransform(); draw(); });
+
+    ui.ds.addEventListener("change", () => {
+      fillContexts(); fillTraits(); loadPoints().then(() => { if (view === "table") drawTable(); });
+    });
+    ui.ctx.addEventListener("change", () =>
+      loadPoints().then(() => { if (view === "table") drawTable(); }));
+    ui.trait.addEventListener("change", () =>
+      loadPoints().then(() => { if (view === "table") drawTable(); }));
+
+    let t;
+    ui.pert.addEventListener("input", () => {
+      clearTimeout(t);
+      t = setTimeout(() => { page = 0; view === "umap" ? draw() : drawTable(); }, 180);
+    });
+    ui.sig.addEventListener("change", () => { page = 0; drawTable(); });
+    ui.prev.addEventListener("click", () => { if (page > 0) { page--; drawTable(); } });
+    ui.next.addEventListener("click", () => { page++; drawTable(); });
+    ui.viewUmap.addEventListener("click", () => setView("umap"));
+    ui.viewTable.addEventListener("click", () => setView("table"));
+    ui.dlView.addEventListener("click", downloadView);
+    ui.dlAll.addEventListener("click", downloadAll);
     el.querySelectorAll("th[data-col]").forEach((th) => {
       th.addEventListener("click", () => {
         const c = th.getAttribute("data-col");
         if (sortCol === c) sortAsc = !sortAsc;
-        else { sortCol = c; sortAsc = c !== "tau"; }
-        markSort(); reload();
+        else { sortCol = c; sortAsc = c !== "trs"; }
+        page = 0; drawTable();
       });
     });
 
-    markSort();
-    return fillFacets().then(draw);
+    let rt;
+    window.addEventListener("resize", () => {
+      clearTimeout(rt);
+      rt = setTimeout(() => { if (view === "umap") draw(); }, 150);
+    });
+
+    fillDatasets(); fillContexts(); fillTraits();
+    setView("umap");
+    renderDetail(null);
+    return loadPoints();
   }
+
+  /* ------------------------------------------------------------------ init */
 
   async function init() {
     const el = document.querySelector(".ps-explorer");
     if (!el || el.dataset.psReady) return;
     el.dataset.psReady = "1";
+    // the explorer needs more width than the prose column allows
+    document.body.classList.add("ps-wide");
 
     const setStatus = (msg) => {
       el.innerHTML = '<div class="ps-x-boot"><span class="ps-x-spinner"></span>' +
@@ -350,19 +679,21 @@
     setStatus("Starting");
 
     try {
-      const conn = await boot(el, setStatus);
-      await render(el, conn);
+      const ctx = await boot(el, setStatus);
+      await render(el, ctx);
     } catch (err) {
       el.innerHTML = '<div class="ps-x-boot ps-x-error">' +
         "Could not start the data explorer.<br><code>" +
         esc(err && err.message ? err.message : err) + "</code><br><br>" +
-        '<span style="color:var(--ps-muted)">The explorer needs WebAssembly and loads its ' +
-        "query engine from a CDN. The tables can also be downloaded directly below.</span></div>";
+        '<span style="color:var(--ps-muted)">The explorer needs WebAssembly and ' +
+        "loads its query engine from a CDN. The tables can also be downloaded " +
+        "directly from the Schema and Downloads page.</span></div>";
       if (window.console) console.error("[perturbscape] explorer failed", err);
     }
   }
 
   if (typeof document$ !== "undefined") document$.subscribe(init);
-  else if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
+  else if (document.readyState === "loading")
+    document.addEventListener("DOMContentLoaded", init);
   else init();
 })();

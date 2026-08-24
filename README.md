@@ -54,22 +54,23 @@ docs/
 ├── assets/                    logo.png (hero), logo-minimal.png (chrome, favicon)
 ├── stylesheets/extra.css      design system and component styles
 └── javascripts/
-    ├── explorer.js            DuckDB-WASM data explorer
+    ├── explorer.js            DuckDB-WASM UMAP explorer and table view
     ├── mermaid.js             palette-matched diagram rendering
     └── mathjax.js             MathJax configuration
 ```
 
 ## The published data
 
-Two Parquet tables in `docs/data/tables/`, built from the per-dataset text files
-in `processed_data`:
+Three Parquet tables in `docs/data/tables/`, built from the per-dataset text
+files in `processed_data` and the precomputed UMAP coordinates in `umaps`:
 
 | File | Rows | Size |
 |---|---:|---:|
-| `pathways.parquet` | 38,954 | 3.4 MB |
-| `meta_programs.parquet` | 6,919,954 | 16.6 MB |
+| `pathways.parquet` | 39,142 | 3.5 MB |
+| `meta_programs.parquet` | 3,971,637 | 9.4 MB |
+| `umap.parquet` | 38,791 | 0.7 MB |
 
-That is 367 MB of source text reduced to under 20 MB, which fits comfortably
+Roughly 370 MB of source text reduced to under 14 MB, which fits comfortably
 inside GitHub's limits and is served directly from Pages.
 
 ### Rebuilding
@@ -77,14 +78,18 @@ inside GitHub's limits and is served directly from Pages.
 The source `.txt` files are **not tracked here**. Point the build script at them:
 
 ```bash
-.venv/bin/python scripts/build_data.py --source /path/to/processed_data
+.venv/bin/python scripts/build_data.py \
+  --source /path/to/processed_data \
+  --umaps  /path/to/umaps
 ```
 
 It harmonizes the three schema variants (the leading grouping column is named
 `data`, `subclass`, or `cell` depending on the dataset, and is absent from four
-of them) into a single `context` column, merges trait names that differ only in
-capitalization, and writes both tables plus `manifest.json`. Every merge it
-applies is printed.
+of them) into a single `context` column, renames `tau`/`pvalue_tau` to
+`trs`/`pvalue`, merges trait names that differ only in capitalization, maps the
+UMAP files onto datasets and contexts, and writes all three tables plus
+`manifest.json`. Every merge and rename it applies is printed, followed by a
+coverage report.
 
 Re-run it and commit the result whenever the upstream results change.
 
@@ -92,7 +97,7 @@ Re-run it and commit the result whenever the upstream results change.
 
 `docs/javascripts/explorer.js` queries the Parquet directly in the browser with
 DuckDB-WASM, fetching only the byte ranges a query touches. That is why a
-6.9M-row table can be filtered interactively without downloading it.
+4M-row gene table can be drilled into interactively without downloading it.
 
 Note that this needs HTTP range request support. GitHub Pages provides it; the
 MkDocs dev server does **not**, so locally DuckDB falls back to fetching whole

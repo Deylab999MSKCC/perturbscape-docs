@@ -1,20 +1,37 @@
 #!/usr/bin/env python3
 """
-Harmonize PerturbScape processed_data into two Parquet tables for the data portal.
+Harmonize PerturbScape results into the Parquet tables the data portal reads.
 
-Source files are not tracked in this repository. Point --source at the folder
-holding the *_perturbation_trait_{meta_programs,pathways}.txt files and re-run
-whenever the upstream results change.
+Source files are not tracked in this repository:
 
-    python scripts/build_data.py --source /path/to/processed_data
+    python scripts/build_data.py \
+        --source /path/to/processed_data \
+        --umaps  /path/to/umaps
 
-Schema differences handled here:
-  * the optional leading grouping column is named `data`, `subclass` or `cell`
-    depending on the dataset, and is absent entirely for four of them -> unified
-    into `context` (falls back to the dataset name when absent)
-  * `Ensembl` is present only in HepG2 / Jurkat / K562-GWPS -> dropped
-  * trait names differing only by capitalization are merged onto the most
-    frequent spelling
+Produces three tables in docs/data/tables/ plus a manifest:
+
+  pathways.parquet       one row per dataset/context/perturbation/trait
+                         carrying TRS, its p-value, and enriched pathways
+  meta_programs.parquet  top 100 ranked meta-program genes per that key
+  umap.parquet           precomputed UMAP coordinates per that key
+
+Naming
+------
+`tau` in the source is published as `trs` (Trait Relevance Score) and
+`pvalue_tau` as `pvalue`. The underlying quantity is unchanged: it is the
+standardized S-LDSC coefficient, zeroed unless positive and p <= 0.05.
+
+Source quirks handled here
+--------------------------
+* the optional leading grouping column is named `data`, `subclass` or `cell`
+  depending on the dataset, and is absent for four of them -> unified into
+  `context`, falling back to the dataset name when absent
+* `Ensembl` appears in only three files -> dropped in favour of HGNC
+* trait names differing only by capitalization are merged onto the most
+  frequent spelling
+* UMAP files are named per dataset and, for the monocyte screens, per modality;
+  T2D additionally uses a handful of perturbation spellings that differ from
+  processed_data and are rewritten onto the processed_data form
 """
 import argparse
 import collections
@@ -30,24 +47,49 @@ STRATUM_COLUMNS = ("data", "subclass", "cell")
 MP_SUFFIX = "_perturbation_trait_meta_programs.txt"
 PW_SUFFIX = "_perturbation_trait_pathways.txt"
 
+# umap filename stem -> (dataset, fixed context or None to read it from the file)
+UMAP_SOURCES = {
+    "hepg2":     ("HepG2", None),
+    "jurkat":    ("Jurkat", None),
+    "k562-gwps": ("K562-GWPS", None),
+    "telohaec":  ("TeloHAEC", None),
+    "perturbai": ("PerturbAI", "column"),
+    "t2d-ko":    ("T2D", "column"),
+    "yao-kd":    ("Monocytes", "Monocytes KD"),
+    "yao-ko":    ("Monocytes", "Monocytes KO"),
+}
+
+# T2D perturbation spellings in the umap files -> the processed_data spelling,
+# which is what the portal displays and joins on.
+PERTURBATION_ALIASES = {
+    "T2D": {
+        "GATA4het":  "GATA4 HET",
+        "GATA6het":  "GATA6 HET",
+        "HHEXhet":   "HHEX HET",
+        "HNF4Ahet":  "HNF4A HET",
+        "QSER1TET1": "QSER1 & TET1",
+        "TET1_2_3":  "TET1/2/3",
+    },
+}
+
 
 def read_tsv(path):
     return pcsv.read_csv(path, parse_options=pcsv.ParseOptions(delimiter="\t"))
 
 
-def context_column(table, columns, dataset):
-    """Return the stratum column as strings, or the dataset name when absent."""
-    stratum = next((c for c in STRATUM_COLUMNS if c in columns), None)
+def context_column(table, dataset):
+    """The stratum column as strings, or the dataset name when absent."""
+    stratum = next((c for c in STRATUM_COLUMNS if c in table.column_names), None)
     if stratum:
         return table[stratum].cast(pa.string())
     return pa.chunked_array([pa.array([dataset] * table.num_rows, pa.string())])
 
 
-def canonical_trait_map(all_traits):
+def canonical_trait_map(counts):
     """Map every trait spelling onto the most frequent casing of that spelling."""
     by_lower = collections.defaultdict(collections.Counter)
-    for trait, count in all_traits.items():
-        by_lower[trait.strip().lower()][trait.strip()] += count
+    for trait, n in counts.items():
+        by_lower[trait.strip().lower()][trait.strip()] += n
     mapping = {}
     for variants in by_lower.values():
         canonical = variants.most_common(1)[0][0]
@@ -56,11 +98,13 @@ def canonical_trait_map(all_traits):
     return mapping
 
 
-def apply_trait_map(table, mapping):
-    traits = table["trait"].cast(pa.string()).to_pylist()
-    mapped = [mapping.get(t.strip(), t.strip()) if t else t for t in traits]
-    idx = table.column_names.index("trait")
-    return table.set_column(idx, "trait", pa.array(mapped, pa.string()))
+def remap(table, column, mapping):
+    if not mapping:
+        return table
+    values = table[column].cast(pa.string()).to_pylist()
+    mapped = [mapping.get(v.strip(), v.strip()) if v else v for v in values]
+    return table.set_column(table.column_names.index(column), column,
+                            pa.array(mapped, pa.string()))
 
 
 def dictionary_encode(table):
@@ -71,10 +115,12 @@ def dictionary_encode(table):
     })
 
 
-def collect_trait_counts(source):
+def collect_trait_counts(paths):
     counts = collections.Counter()
-    for path in sorted(source.glob(f"*{PW_SUFFIX}")) + sorted(source.glob(f"*{MP_SUFFIX}")):
+    for path in paths:
         table = read_tsv(path)
+        if "trait" not in table.column_names:
+            continue
         for trait in table["trait"].cast(pa.string()).to_pylist():
             if trait:
                 counts[trait.strip()] += 1
@@ -85,18 +131,17 @@ def build_meta_programs(source, trait_map):
     parts = []
     for path in sorted(source.glob(f"*{MP_SUFFIX}")):
         dataset = path.name[: -len(MP_SUFFIX)]
-        table = read_tsv(path)
-        columns = table.column_names
+        t = read_tsv(path)
         parts.append(pa.table({
-            "dataset": pa.array([dataset] * table.num_rows, pa.string()),
-            "context": context_column(table, columns, dataset),
-            "perturbation": table["perturbation"].cast(pa.string()),
-            "trait": table["trait"].cast(pa.string()),
-            "gene": table["HGNC"].cast(pa.string()),
-            "rank": table["rank"].cast(pa.float32()),
+            "dataset": pa.array([dataset] * t.num_rows, pa.string()),
+            "context": context_column(t, dataset),
+            "perturbation": t["perturbation"].cast(pa.string()),
+            "trait": t["trait"].cast(pa.string()),
+            "gene": t["HGNC"].cast(pa.string()),
+            "rank": t["rank"].cast(pa.float32()),
         }))
-        print(f"  {dataset:<12} {table.num_rows:>9,} rows", file=sys.stderr)
-    combined = apply_trait_map(pa.concat_tables(parts), trait_map)
+        print(f"  {dataset:<12} {t.num_rows:>9,} rows", file=sys.stderr)
+    combined = remap(pa.concat_tables(parts), "trait", trait_map)
     return combined.sort_by([
         ("dataset", "ascending"), ("trait", "ascending"),
         ("perturbation", "ascending"), ("rank", "ascending"),
@@ -107,55 +152,115 @@ def build_pathways(source, trait_map):
     parts = []
     for path in sorted(source.glob(f"*{PW_SUFFIX}")):
         dataset = path.name[: -len(PW_SUFFIX)]
-        table = read_tsv(path)
-        columns = table.column_names
+        t = read_tsv(path)
         parts.append(pa.table({
-            "dataset": pa.array([dataset] * table.num_rows, pa.string()),
-            "context": context_column(table, columns, dataset),
-            "perturbation": table["perturbation"].cast(pa.string()),
-            "trait": table["trait"].cast(pa.string()),
-            "tau": table["tau"].cast(pa.float64()),
-            "pvalue_tau": table["pvalue_tau"].cast(pa.float64()),
-            "pathways": table["pathways"].cast(pa.string()),
-            "neglog10p_pathways": table["neglog10p_pathways"].cast(pa.string()),
+            "dataset": pa.array([dataset] * t.num_rows, pa.string()),
+            "context": context_column(t, dataset),
+            "perturbation": t["perturbation"].cast(pa.string()),
+            "trait": t["trait"].cast(pa.string()),
+            "trs": t["tau"].cast(pa.float64()),
+            "pvalue": t["pvalue_tau"].cast(pa.float64()),
+            "pathways": t["pathways"].cast(pa.string()),
+            "neglog10p_pathways": t["neglog10p_pathways"].cast(pa.string()),
         }))
-        print(f"  {dataset:<12} {table.num_rows:>9,} rows", file=sys.stderr)
-    combined = apply_trait_map(pa.concat_tables(parts), trait_map)
+        print(f"  {dataset:<12} {t.num_rows:>9,} rows", file=sys.stderr)
+    combined = remap(pa.concat_tables(parts), "trait", trait_map)
+    return combined.sort_by([("dataset", "ascending"), ("pvalue", "ascending")])
+
+
+def build_umaps(umaps, trait_map):
+    parts = []
+    for path in sorted(umaps.glob("*_umap.txt")):
+        stem = path.name[: -len("_umap.txt")]
+        if stem not in UMAP_SOURCES:
+            print(f"  WARNING: no dataset mapping for {path.name}, skipped",
+                  file=sys.stderr)
+            continue
+        dataset, context_rule = UMAP_SOURCES[stem]
+        t = read_tsv(path)
+
+        if context_rule == "column":
+            ctx = context_column(t, dataset)
+        elif context_rule is None:
+            ctx = pa.chunked_array([pa.array([dataset] * t.num_rows, pa.string())])
+        else:
+            ctx = pa.chunked_array([pa.array([context_rule] * t.num_rows, pa.string())])
+
+        part = pa.table({
+            "dataset": pa.array([dataset] * t.num_rows, pa.string()),
+            "context": ctx,
+            "perturbation": t["perturbation"].cast(pa.string()),
+            "trait": t["trait"].cast(pa.string()),
+            "umap1": t["UMAP.1"].cast(pa.float32()),
+            "umap2": t["UMAP.2"].cast(pa.float32()),
+            "trs": t["TRS"].cast(pa.float64()),
+        })
+        print(f"  {path.name:<22} -> {dataset:<11} {t.num_rows:>7,} rows",
+              file=sys.stderr)
+        aliases = PERTURBATION_ALIASES.get(dataset)
+        if aliases:
+            before = set(part["perturbation"].cast(pa.string()).to_pylist())
+            part = remap(part, "perturbation", aliases)
+            renamed = sorted(before & set(aliases))
+            if renamed:
+                print(f"      renamed {len(renamed)} perturbation(s): "
+                      f"{', '.join(renamed[:6])}", file=sys.stderr)
+        parts.append(part)
+
+    combined = remap(pa.concat_tables(parts), "trait", trait_map)
     return combined.sort_by([
-        ("dataset", "ascending"), ("pvalue_tau", "ascending"),
+        ("dataset", "ascending"), ("context", "ascending"),
+        ("trait", "ascending"), ("perturbation", "ascending"),
     ])
 
 
-def write_manifest(meta, paths, out_dir, sizes):
-    def uniq(table, column):
-        return sorted({v for v in table[column].cast(pa.string()).to_pylist() if v})
+def key_set(table, columns):
+    cols = [table[c].cast(pa.string()).to_pylist() for c in columns]
+    return set(zip(*cols))
 
-    datasets = {}
+
+def write_manifest(meta, paths, umap, out_dir, sizes):
     ds_col = paths["dataset"].cast(pa.string()).to_pylist()
     ctx_col = paths["context"].cast(pa.string()).to_pylist()
     tr_col = paths["trait"].cast(pa.string()).to_pylist()
     pt_col = paths["perturbation"].cast(pa.string()).to_pylist()
-    grouped = collections.defaultdict(lambda: {"contexts": set(), "traits": set(), "perturbations": set()})
+
+    # which dataset/context/trait combinations actually have umap coordinates
+    umap_keys = key_set(umap, ("dataset", "context", "trait"))
+
+    grouped = collections.defaultdict(
+        lambda: {"contexts": set(), "traits": set(), "perturbations": set()})
     for d, c, t, p in zip(ds_col, ctx_col, tr_col, pt_col):
         grouped[d]["contexts"].add(c)
         grouped[d]["traits"].add(t)
         grouped[d]["perturbations"].add(p)
-    for name, values in grouped.items():
+
+    datasets = {}
+    for name, v in grouped.items():
+        contexts = sorted(v["contexts"])
+        umap_traits = sorted({
+            t for t in v["traits"]
+            if any((name, c, t) in umap_keys for c in contexts)
+        })
         datasets[name] = {
-            "contexts": sorted(values["contexts"]),
-            "traits": sorted(values["traits"]),
-            "n_perturbations": len(values["perturbations"]),
+            "contexts": contexts,
+            "traits": sorted(v["traits"]),
+            "umap_traits": umap_traits,
+            "n_perturbations": len(v["perturbations"]),
         }
 
     manifest = {
+        "score_name": "TRS",
+        "score_long_name": "Trait Relevance Score",
         "datasets": datasets,
-        "all_traits": uniq(paths, "trait"),
+        "all_traits": sorted(set(tr_col)),
         "totals": {
-            "meta_program_rows": meta.num_rows,
-            "pathway_rows": paths.num_rows,
             "datasets": len(datasets),
-            "traits": len(uniq(paths, "trait")),
-            "perturbations": len(uniq(paths, "perturbation")),
+            "traits": len(set(tr_col)),
+            "perturbations": len(set(pt_col)),
+            "pairs": paths.num_rows,
+            "meta_program_rows": meta.num_rows,
+            "umap_points": umap.num_rows,
         },
         "files": sizes,
     }
@@ -164,52 +269,86 @@ def write_manifest(meta, paths, out_dir, sizes):
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__,
-                                     formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--source", required=True, type=pathlib.Path,
-                        help="folder containing the processed_data .txt files")
-    parser.add_argument("--out", type=pathlib.Path, default=pathlib.Path("docs/data/tables"),
-                        help="output folder for the Parquet tables")
-    args = parser.parse_args()
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--source", required=True, type=pathlib.Path,
+                    help="folder holding the processed_data .txt files")
+    ap.add_argument("--umaps", required=True, type=pathlib.Path,
+                    help="folder holding the *_umap.txt files")
+    ap.add_argument("--out", type=pathlib.Path,
+                    default=pathlib.Path("docs/data/tables"))
+    args = ap.parse_args()
 
-    if not args.source.is_dir():
-        parser.error(f"source folder not found: {args.source}")
+    for label, folder in (("source", args.source), ("umaps", args.umaps)):
+        if not folder.is_dir():
+            ap.error(f"{label} folder not found: {folder}")
     args.out.mkdir(parents=True, exist_ok=True)
 
     print("scanning trait names...", file=sys.stderr)
-    trait_map = canonical_trait_map(collect_trait_counts(args.source))
+    every = (sorted(args.source.glob(f"*{PW_SUFFIX}"))
+             + sorted(args.source.glob(f"*{MP_SUFFIX}"))
+             + sorted(args.umaps.glob("*_umap.txt")))
+    trait_map = canonical_trait_map(collect_trait_counts(every))
     merged = {k: v for k, v in trait_map.items() if k != v}
     if merged:
         print(f"  merging {len(merged)} case-variant trait name(s):", file=sys.stderr)
         for variant, canonical in sorted(merged.items()):
             print(f"    {variant!r} -> {canonical!r}", file=sys.stderr)
+    else:
+        print("  no case-variant trait names found", file=sys.stderr)
 
     print("building meta_programs...", file=sys.stderr)
     meta = build_meta_programs(args.source, trait_map)
     print("building pathways...", file=sys.stderr)
     paths = build_pathways(args.source, trait_map)
+    print("building umaps...", file=sys.stderr)
+    umap = build_umaps(args.umaps, trait_map)
 
-    mp_out = args.out / "meta_programs.parquet"
-    pw_out = args.out / "pathways.parquet"
-    pq.write_table(dictionary_encode(meta), mp_out,
-                   compression="zstd", use_dictionary=True, row_group_size=200_000)
-    pq.write_table(dictionary_encode(paths), pw_out,
-                   compression="zstd", use_dictionary=True, row_group_size=20_000)
-
-    sizes = {
-        "meta_programs.parquet": mp_out.stat().st_size,
-        "pathways.parquet": pw_out.stat().st_size,
+    outputs = {
+        "meta_programs.parquet": (meta, 200_000),
+        "pathways.parquet": (paths, 20_000),
+        "umap.parquet": (umap, 20_000),
     }
-    manifest = write_manifest(meta, paths, args.out, sizes)
+    sizes = {}
+    for name, (table, row_group) in outputs.items():
+        target = args.out / name
+        pq.write_table(dictionary_encode(table), target,
+                       compression="zstd", use_dictionary=True,
+                       row_group_size=row_group)
+        sizes[name] = target.stat().st_size
+
+    manifest = write_manifest(meta, paths, umap, args.out, sizes)
+
+    # coverage report: how much of the portal actually links up
+    pw_keys = key_set(paths, ("dataset", "context", "perturbation", "trait"))
+    mp_keys = key_set(meta, ("dataset", "context", "perturbation", "trait"))
+    um_keys = key_set(umap, ("dataset", "context", "perturbation", "trait"))
 
     print("\nwrote:", file=sys.stderr)
     for name, size in sizes.items():
         print(f"  {name:<24} {size/1e6:6.2f} MB", file=sys.stderr)
-    print(f"  manifest.json", file=sys.stderr)
-    print(f"\n{manifest['totals']['meta_program_rows']:,} meta-program rows | "
-          f"{manifest['totals']['pathway_rows']:,} pathway rows | "
-          f"{manifest['totals']['datasets']} datasets | "
-          f"{manifest['totals']['traits']} traits", file=sys.stderr)
+    print("  manifest.json", file=sys.stderr)
+
+    t = manifest["totals"]
+    print(f"\n{t['pairs']:,} pairs | {t['meta_program_rows']:,} gene ranks | "
+          f"{t['umap_points']:,} umap points | {t['datasets']} datasets | "
+          f"{t['traits']} traits", file=sys.stderr)
+
+    no_genes = pw_keys - mp_keys
+    orphan_umap = um_keys - pw_keys
+    print(f"\ncoverage:", file=sys.stderr)
+    print(f"  pairs without meta-program genes : {len(no_genes):,} / {len(pw_keys):,}",
+          file=sys.stderr)
+    if no_genes:
+        by_ds = collections.Counter(k[0] for k in no_genes)
+        for d, n in by_ds.most_common():
+            print(f"      {d:<12} {n:,}", file=sys.stderr)
+    print(f"  umap points without results      : {len(orphan_umap):,} / {len(um_keys):,}",
+          file=sys.stderr)
+    if orphan_umap:
+        by_ds = collections.Counter(k[0] for k in orphan_umap)
+        for d, n in by_ds.most_common():
+            print(f"      {d:<12} {n:,}", file=sys.stderr)
 
 
 if __name__ == "__main__":

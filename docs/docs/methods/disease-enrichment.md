@@ -15,7 +15,7 @@ flowchart TB
     S2["2. Build the meta-program<br/>leave-one-chromosome-out ridge"] --> S3
     S3["3. Variant annotation<br/>top 500 genes via V2G links"] --> S4
     S4["4. Stratified LD score regression<br/>program annotation + baseline"] --> S5
-    S5["5. tau* and enrichment<br/>jackknife, standardized"] --> OUT["Published results"]
+    S5["5. TRS and enrichment<br/>jackknife, standardized"] --> OUT["Published results"]
     S2 --> PW["Pathway enrichment<br/>ConsensusPathDB"] --> OUT
 ```
 
@@ -250,7 +250,7 @@ gene ranking - the meta-program.
 !!! warning "A perturbation with no surviving programs still produces output"
     If no program passed selection, the design matrix is empty and every gene is
     assigned the training mean. The meta-program exists but is uninformative, and
-    its downstream tau\* will be near zero.
+    its downstream TRS will be near zero.
 
 ---
 
@@ -339,12 +339,14 @@ index 54 once the baseline annotations follow. That index is passed explicitly a
 
 ---
 
-## Step 5: tau\* and enrichment
+## Step 5: TRS and enrichment
 
 The raw S-LDSC coefficient is not comparable across annotations, because it
-depends on annotation size and on the trait's total heritability. tau\*
-standardizes it: the per-SNP effect of a one standard deviation increase in the
-annotation, as a fraction of total heritability.
+depends on annotation size and on the trait's total heritability. The
+standardized coefficient — tau\* in the S-LDSC literature, and what this site
+publishes as the **Trait Relevance Score (TRS)** — fixes that: the per-SNP
+effect of a one standard deviation increase in the annotation, as a fraction of
+total heritability.
 
 ```r
 Mref <- 5961159
@@ -362,7 +364,8 @@ p-value is one-sided:
 tau_meta_info %>% mutate(pvalue = 1 - pnorm(mean / se))
 ```
 
-Finally, tau is **zeroed unless it is positive and significant**:
+Finally the value is **zeroed unless it is positive and significant**, which is
+what gets published as TRS:
 
 ```r
 all_programs_tau %>%
@@ -377,11 +380,10 @@ Rscript save_enrichment.R ${SCRIPTS} ${OUT} ${TRAIT} ${PERTURBATIONS[@]}
 
 **Output** `tau_star/tau_star/{trait}.csv` and `tau_star/enrichment/{trait}.csv`.
 
-!!! danger "tau = 0 means 'not significant', not 'no effect'"
-    Because of the `ifelse` above, a zero in the published `tau` column is a
-    thresholding artefact, not an estimate. Always read `tau` together with
-    `pvalue_tau`. The [Data Portal](../../data/index.md) filters to
-    `pvalue_tau <= 0.05` by default for this reason.
+!!! danger "TRS = 0 means 'not significant', not 'no effect'"
+    Because of the `ifelse` above, a zero in the published `trs` column is a
+    thresholding artefact, not an estimate. Always read `trs` together with
+    `pvalue`. The [Data Portal](../../data/index.md) treats it accordingly.
 
     Note also that the p-value is one-sided, testing only for positive
     enrichment. Depletion is not tested.
@@ -409,12 +411,12 @@ open a perturbation-trait pair.
 
 | Column | Meaning |
 |---|---|
-| `tau` | Standardized S-LDSC coefficient, zeroed when not positive and significant |
-| `pvalue_tau` | One-sided p-value from the jackknife standard error |
+| `trs` | Trait Relevance Score — the standardized S-LDSC coefficient, zeroed when not positive and significant |
+| `pvalue` | One-sided p-value from the jackknife standard error |
 | `pathways` | Top ConsensusPathDB pathways for the meta-program |
 | `neglog10p_pathways` | Their `-log10(p)`, in the same order |
 
-A perturbation-trait pair with a large positive tau\* and small p-value means:
+A perturbation-trait pair with a large positive TRS and small p-value means:
 the genes that this perturbation's programs point to are, through their linked
 variants, enriched for heritability of that trait beyond what the baseline model
 already explains.

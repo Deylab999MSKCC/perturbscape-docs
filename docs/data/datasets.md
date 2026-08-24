@@ -36,8 +36,9 @@ erythroid indices.
 
 <div class="ps-ds" markdown>
 ### Monocytes
-<p class="ps-ds-sub">Primary monocytes, KD and KO</p>
-The only dataset with two perturbation modalities, analyzed separately.
+<p class="ps-ds-sub">Knockdown and knockout</p>
+The only dataset with two perturbation modalities, analyzed and plotted
+separately.
 <dl><dt>Perturbations</dt><dd>181</dd><dt>Traits</dt><dd>23</dd><dt>Contexts</dt><dd>2</dd></dl>
 </div>
 
@@ -50,9 +51,10 @@ Scored against autism, with results reported separately per neuronal subclass.
 
 <div class="ps-ds" markdown>
 ### T2D
-<p class="ps-ds-sub">Pancreatic islet, D18</p>
-Islet-derived cells split by endocrine status, scored against glycemic traits.
-<dl><dt>Perturbations</dt><dd>32</dd><dt>Traits</dt><dd>2</dd><dt>Contexts</dt><dd>3</dd></dl>
+<p class="ps-ds-sub">Pancreatic islet differentiation</p>
+Islet-directed differentiation sampled across stages, scored against glycemic
+traits.
+<dl><dt>Perturbations</dt><dd>35</dd><dt>Traits</dt><dd>2</dd><dt>Contexts</dt><dd>6</dd></dl>
 </div>
 
 <div class="ps-ds" markdown>
@@ -79,23 +81,27 @@ biomarkers and TeloHAEC carries blood pressure and coronary artery disease.
 
     All auto-immune, Allergy eczema diagnosed, Alzheimers, Asthma diagnosed,
     Celiac, Crohn's disease, Eosinophil count, Hypothyroidism self rep., IBD,
-    Lupus, Lymphocyte count, Mean Corpuscular Hemoglobin, Mean platelet vol.,
+    Lupus, Lymphocyte count, Mean corpuscular hemoglobin, Mean platelet vol.,
     Monocyte count, Multiple sclerosis, Platelet count, Primary biliary
-    cirrhosis, Psoriasis, Red count, Rheumatoid arthritis, Type 1 diabetes,
-    Ulcerative colitis, White count
+    cirrhosis, Psoriasis, Red blood cell count, Rheumatoid arthritis, Type 1
+    diabetes, Ulcerative colitis, White count
+
+    *Mean corpuscular hemoglobin, Mean platelet vol., Platelet count, and Red
+    blood cell count have results but no UMAP coordinates, so they do not appear
+    in the explorer's trait selector. They are included in the downloads.*
 
 === "K562-GWPS"
 
-    Mean Corpuscular Hemoglobin, Red Blood Cell Count
+    Mean corpuscular hemoglobin, Red blood cell count
 
 === "Monocytes"
 
     All auto-immune, Allergy eczema diagnosed, Alzheimers, Asthma diagnosed,
     Celiac, Crohn's disease, Eosinophil count, Hypothyroidism self rep., IBD,
-    Lupus, Lymphocyte count, Mean Corpuscular Hemoglobin, Mean platelet vol.,
+    Lupus, Lymphocyte count, Mean corpuscular hemoglobin, Mean platelet vol.,
     Monocyte count, Multiple sclerosis, Platelet count, Primary biliary
-    cirrhosis, Psoriasis, Red count, Rheumatoid arthritis, Type 1 diabetes,
-    Ulcerative colitis, White count
+    cirrhosis, Psoriasis, Red blood cell count, Rheumatoid arthritis, Type 1
+    diabetes, Ulcerative colitis, White count
 
 === "PerturbAI"
 
@@ -107,7 +113,7 @@ biomarkers and TeloHAEC carries blood pressure and coronary artery disease.
 
 === "TeloHAEC"
 
-    Coronary Artery Disease, Diastolic Blood Pressure, Systolic Blood Pressure
+    Coronary artery disease, Diastolic blood pressure, Systolic blood pressure
 
 ## Context values
 
@@ -116,39 +122,44 @@ which is why the column carries a neutral name.
 
 | Dataset | Context values | Meaning |
 |---|---|---|
-| Monocytes | `Monocytes KD`, `Monocytes KO` | Perturbation modality - knockdown versus knockout |
+| Monocytes | `Monocytes KD`, `Monocytes KO` | Perturbation modality — knockdown versus knockout |
 | PerturbAI | `005_L4-5_IT_CTX_Glut`, `052_Pvalb_Gaba`, `151_TH_Prkcd_Grin2c_Glut`, `155_MB_Glut` | Neuronal subclass |
-| T2D | `D18`, `D18 Endo`, `D18 Non-endo` | Cell state - all cells, endocrine, non-endocrine |
-| HepG2, Jurkat, K562-GWPS, TeloHAEC | none | No subdivision; context repeats the dataset name |
+| T2D | `D3`, `D7`, `D11`, `D18`, `D18 Endo`, `D18 Non-endo` | Differentiation stage, with day 18 additionally split by endocrine status |
+| HepG2, Jurkat, K562-GWPS, TeloHAEC | none | No subdivision; `context` repeats the dataset name |
 
-For the four datasets without a subdivision, `context` is set to the dataset name
-so that the column is never empty. The explorer displays a dash and hides the
-context filter for those.
+For the four datasets without a subdivision, `context` is set to the dataset
+name so the column is never empty. The explorer hides the context selector for
+those.
+
+Each context is scored and plotted independently: selecting Monocytes KD gives a
+different UMAP from Monocytes KO, and each T2D stage has its own.
 
 ## Notes on trait naming
 
-Trait names come from the GWAS panel used for each dataset and were kept as they
-appear in the source results, with one exception: names differing only in
-capitalization were merged onto their most frequent spelling, so *Mean
-corpuscular hemoglobin* and *Mean Corpuscular Hemoglobin* are one trait.
+Trait names come from the GWAS panel used for each dataset and are kept as they
+appear in the source results. The build script merges names that differ only in
+capitalization onto their most frequent spelling; the current source files are
+already consistent, so no merges are being applied.
 
-Differently worded names were **not** merged. `Red count` (Jurkat, Monocytes) and
-`Red Blood Cell Count` (K562-GWPS) remain separate entries even though they
-measure closely related quantities, because they come from different GWAS panels
-and merging them would misrepresent the source. Filter for both if you want the
-combined view.
+Names are not merged across different wordings. If two panels describe a
+closely related quantity differently, both entries stand, because merging them
+would misrepresent the source.
 
 ## Comparing across datasets
 
-tau\* is standardized by total trait heritability, so values are comparable
-across annotations and across traits. Comparisons **across datasets** still
-warrant care:
+TRS is standardized by total trait heritability, so values are comparable across
+annotations and across traits. Comparisons **across datasets** still warrant
+care:
 
 - Screens differ enormously in size. K562-GWPS tests 7,969 perturbations against
-  2 traits; T2D tests 32 against 2. Multiple-testing burden is not comparable.
+  2 traits; T2D tests 35 against 2. Multiple-testing burden is not comparable.
 - The variant-to-gene links used in
   [annotation](../docs/methods/disease-enrichment.md#step-3-variant-annotation)
   are restricted by tissue, so the SNP universe reachable by a program differs
   between a liver and a brain dataset.
 - Trait panels barely overlap, so most cross-dataset comparisons are between
   different traits as well as different cell systems.
+
+UMAP coordinates are computed per dataset and trait. Positions are meaningful
+only within a single plot — a point at the same coordinates in two different
+UMAPs means nothing.
