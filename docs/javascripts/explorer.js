@@ -421,15 +421,14 @@
           <button class="ps-x-locate" id="psx-locate" type="button">Centre on plot</button>
         </div>
         <div class="ps-x-detail-body" id="psx-detail-body">
-          ${p.has_result ? '<div class="ps-x-detail-empty">Loading…</div>'
-            : '<div class="ps-x-detail-empty">No enrichment results were produced for this perturbation and trait, so there are no meta-program genes or pathways to show.</div>'}
+          <div class="ps-x-detail-empty">Loading…</div>
         </div>`;
       const locate = el.querySelector("#psx-locate");
       if (locate) locate.addEventListener("click", () => {
         focusOn(p);
         ui.plotwrap.scrollIntoView({ block: "nearest", behavior: "smooth" });
       });
-      if (p.has_result) loadDetail(p);
+      loadDetail(p);
     }
 
     async function loadDetail(p) {
@@ -559,7 +558,7 @@
         return `<li role="option" data-i="${i}" aria-selected="false">
           <span class="ps-x-suggest-name">${marked}</span>
           <span class="ps-x-suggest-trs ${sig ? "ps-x-sig" : "ps-x-nsig"}">${
-            p.has_result ? fmtTRS(p.trs) : "—"}</span></li>`;
+            fmtTRS(p.trs)}</span></li>`;
       }).join("");
       ui.suggest.hidden = false;
       ui.pert.setAttribute("aria-expanded", "true");
@@ -741,7 +740,7 @@
         ui.tooltip.hidden = false;
         ui.tooltip.innerHTML =
           `<b>${esc(p.perturbation)}</b><span>TRS ${fmtTRS(p.trs)}` +
-          (p.has_result ? ` · P ${fmtP(p.pvalue)}` : " · no results") + `</span>`;
+          (p.pvalue != null ? ` · P ${fmtP(p.pvalue)}` : "") + `</span>`;
         const s = project(p);
         ui.tooltip.style.left = s.x + "px";
         ui.tooltip.style.top = (s.y - 12) + "px";

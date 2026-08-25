@@ -130,13 +130,17 @@ table's pathway column shows a dash.
 
 **No meta-program genes.** 147 pairs have no ranked genes recorded.
 
-**No results row.** 709 UMAP points have no entry in the results table under any
-trait, so they have no TRS, p-value, genes or pathways. These are concentrated
-in the monocyte screens and dominated by HLA genes, readthrough transcripts and
-antisense RNAs, which suggests they were filtered out when the results were
-assembled but left in the UMAP coordinates. They are plotted using the score
-their UMAP file carries, and selecting one says that no enrichment result is
-available.
+**No results row.** 709 UMAP points have no entry in the results table, so no
+p-value is recorded for them; the panel shows a dash in its place. They do have
+full meta-programs, and are plotted using the score their UMAP file carries, so
+in practice they read the same as any other perturbation whose meta-program
+enriched nothing.
+
+Every one of these has a hyphen in its name — HLA genes, readthrough
+transcripts, antisense RNAs — and they come from four of the seven datasets.
+PerturbAI and T2D carry their hyphenated perturbations through to the results
+without loss, so this is a name-handling gap being corrected upstream rather
+than a property of the data.
 
 See [Datasets](datasets.md) for what each system is and what the context values
 mean.
