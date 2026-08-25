@@ -5,10 +5,10 @@ edges of the data are.
 
 <div class="ps-metrics" markdown>
 <div class="ps-metric"><span class="ps-metric-value">7</span><span class="ps-metric-label">Datasets</span></div>
-<div class="ps-metric"><span class="ps-metric-value">10,223</span><span class="ps-metric-label">Perturbations</span></div>
+<div class="ps-metric"><span class="ps-metric-value">10,260</span><span class="ps-metric-label">Perturbations</span></div>
 <div class="ps-metric"><span class="ps-metric-value">39</span><span class="ps-metric-label">Traits</span></div>
-<div class="ps-metric"><span class="ps-metric-value">39,142</span><span class="ps-metric-label">Pairs</span></div>
-<div class="ps-metric"><span class="ps-metric-value">4.0M</span><span class="ps-metric-label">Gene ranks</span></div>
+<div class="ps-metric"><span class="ps-metric-value">39,119</span><span class="ps-metric-label">Pairs</span></div>
+<div class="ps-metric"><span class="ps-metric-value">3.9M</span><span class="ps-metric-label">Gene ranks</span></div>
 </div>
 
 ## What TRS means
@@ -106,41 +106,29 @@ reads, and can be queried directly from Python or R without the browser.
 
 ## Coverage
 
-The UMAP is available for most, not all, of the published results. Traits
-without precomputed coordinates do not appear in the trait selector, but their
-results are still included in **Download all** and in the bulk tables.
+Every trait in every dataset has precomputed UMAP coordinates, so anything in
+the results is reachable from the plot.
 
-| Dataset | Contexts | Traits with UMAP | All traits | Perturbations |
-|---|---:|---:|---:|---:|
-| HepG2 | 1 | 10 | 10 | 257 |
-| Jurkat | 1 | 19 | 23 | 186 |
-| K562-GWPS | 1 | 2 | 2 | 7,969 |
-| Monocytes | 2 | 23 | 23 | 181 |
-| PerturbAI | 4 | 1 | 1 | 1,858 |
-| T2D | 6 | 2 | 2 | 35 |
-| TeloHAEC | 1 | 3 | 3 | 580 |
+| Dataset | Contexts | Traits | Perturbations |
+|---|---:|---:|---:|
+| HepG2 | 1 | 10 | 258 |
+| Jurkat | 1 | 19 | 187 |
+| K562-GWPS | 1 | 2 | 7,993 |
+| Monocytes | 2 | 23 | 195 |
+| PerturbAI | 4 | 1 | 1,858 |
+| T2D | 6 | 2 | 35 |
+| TeloHAEC | 1 | 3 | 580 |
 
-Three different kinds of gap exist in the data, and the portal distinguishes
-them rather than lumping them together.
+Two gaps remain, and the portal shows both for what they are.
 
-**No enriched pathways.** 19,082 of 39,142 scored pairs — just under half — have
-a TRS and a p-value but no enriched pathways at all: the meta-program simply did
-not reach significance for any pathway. The detail panel says so, and the
-table's pathway column shows a dash.
+**No enriched pathways.** 19,473 of 39,119 scored pairs — almost exactly half —
+have a TRS and a p-value but no enriched pathways: the meta-program did not
+reach significance for any pathway. The detail panel says so, and the table's
+pathway column shows a dash.
 
-**No meta-program genes.** 147 pairs have no ranked genes recorded.
-
-**No results row.** 709 UMAP points have no entry in the results table, so no
-p-value is recorded for them; the panel shows a dash in its place. They do have
-full meta-programs, and are plotted using the score their UMAP file carries, so
-in practice they read the same as any other perturbation whose meta-program
-enriched nothing.
-
-Every one of these has a hyphen in its name — HLA genes, readthrough
-transcripts, antisense RNAs — and they come from four of the seven datasets.
-PerturbAI and T2D carry their hyphenated perturbations through to the results
-without loss, so this is a name-handling gap being corrected upstream rather
-than a property of the data.
+**No meta-program genes.** 96 pairs have no ranked genes recorded. Every one of
+them is non-significant — the largest TRS among them is 0 and the smallest
+p-value is 0.5 — so no scored result is affected.
 
 See [Datasets](datasets.md) for what each system is and what the context values
 mean.

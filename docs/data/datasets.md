@@ -15,7 +15,7 @@ trait list differs substantially between them.
 <p class="ps-ds-sub">Hepatocellular carcinoma line</p>
 Liver-derived cells, scored against circulating liver-function and lipid
 biomarkers.
-<dl><dt>Perturbations</dt><dd>257</dd><dt>Traits</dt><dd>10</dd><dt>Contexts</dt><dd>1</dd></dl>
+<dl><dt>Perturbations</dt><dd>258</dd><dt>Traits</dt><dd>10</dd><dt>Contexts</dt><dd>1</dd></dl>
 </div>
 
 <div class="ps-ds" markdown>
@@ -23,7 +23,7 @@ biomarkers.
 <p class="ps-ds-sub">T lymphocyte leukemia line</p>
 T-cell system scored against a broad panel of autoimmune conditions and blood
 cell indices.
-<dl><dt>Perturbations</dt><dd>186</dd><dt>Traits</dt><dd>23</dd><dt>Contexts</dt><dd>1</dd></dl>
+<dl><dt>Perturbations</dt><dd>187</dd><dt>Traits</dt><dd>19</dd><dt>Contexts</dt><dd>1</dd></dl>
 </div>
 
 <div class="ps-ds" markdown>
@@ -31,7 +31,7 @@ cell indices.
 <p class="ps-ds-sub">Genome-wide Perturb-seq</p>
 By far the largest screen here, covering most expressed genes, scored against
 erythroid indices.
-<dl><dt>Perturbations</dt><dd>7,969</dd><dt>Traits</dt><dd>2</dd><dt>Contexts</dt><dd>1</dd></dl>
+<dl><dt>Perturbations</dt><dd>7,993</dd><dt>Traits</dt><dd>2</dd><dt>Contexts</dt><dd>1</dd></dl>
 </div>
 
 <div class="ps-ds" markdown>
@@ -39,7 +39,7 @@ erythroid indices.
 <p class="ps-ds-sub">Knockdown and knockout</p>
 The only dataset with two perturbation modalities, analyzed and plotted
 separately.
-<dl><dt>Perturbations</dt><dd>181</dd><dt>Traits</dt><dd>23</dd><dt>Contexts</dt><dd>2</dd></dl>
+<dl><dt>Perturbations</dt><dd>195</dd><dt>Traits</dt><dd>23</dd><dt>Contexts</dt><dd>2</dd></dl>
 </div>
 
 <div class="ps-ds" markdown>
@@ -81,14 +81,9 @@ biomarkers and TeloHAEC carries blood pressure and coronary artery disease.
 
     All auto-immune, Allergy eczema diagnosed, Alzheimers, Asthma diagnosed,
     Celiac, Crohn's disease, Eosinophil count, Hypothyroidism self rep., IBD,
-    Lupus, Lymphocyte count, Mean corpuscular hemoglobin, Mean platelet vol.,
-    Monocyte count, Multiple sclerosis, Platelet count, Primary biliary
-    cirrhosis, Psoriasis, Red blood cell count, Rheumatoid arthritis, Type 1
-    diabetes, Ulcerative colitis, White count
-
-    *Mean corpuscular hemoglobin, Mean platelet vol., Platelet count, and Red
-    blood cell count have results but no UMAP coordinates, so they do not appear
-    in the explorer's trait selector. They are included in the downloads.*
+    Lupus, Lymphocyte count, Monocyte count, Multiple sclerosis, Primary biliary
+    cirrhosis, Psoriasis, Rheumatoid arthritis, Type 1 diabetes, Ulcerative
+    colitis, White count
 
 === "K562-GWPS"
 
@@ -151,7 +146,7 @@ TRS is standardized by total trait heritability, so values are comparable across
 annotations and across traits. Comparisons **across datasets** still warrant
 care:
 
-- Screens differ enormously in size. K562-GWPS tests 7,969 perturbations against
+- Screens differ enormously in size. K562-GWPS tests 7,993 perturbations against
   2 traits; T2D tests 35 against 2. Multiple-testing burden is not comparable.
 - The variant-to-gene links used in
   [annotation](../docs/methods/disease-enrichment.md#step-3-variant-annotation)

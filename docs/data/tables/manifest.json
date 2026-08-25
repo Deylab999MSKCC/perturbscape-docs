@@ -30,7 +30,7 @@
     "Total bilirubin",
     "Triglycerides"
    ],
-   "n_perturbations": 257
+   "n_perturbations": 258
   },
   "Jurkat": {
    "contexts": [
@@ -48,14 +48,10 @@
     "IBD",
     "Lupus",
     "Lymphocyte count",
-    "Mean corpuscular hemoglobin",
-    "Mean platelet vol.",
     "Monocyte count",
     "Multiple sclerosis",
-    "Platelet count",
     "Primary biliary cirrhosis",
     "Psoriasis",
-    "Red blood cell count",
     "Rheumatoid arthritis",
     "Type 1 diabetes",
     "Ulcerative colitis",
@@ -82,7 +78,7 @@
     "Ulcerative colitis",
     "White count"
    ],
-   "n_perturbations": 186
+   "n_perturbations": 187
   },
   "K562-GWPS": {
    "contexts": [
@@ -96,7 +92,7 @@
     "Mean corpuscular hemoglobin",
     "Red blood cell count"
    ],
-   "n_perturbations": 7969
+   "n_perturbations": 7993
   },
   "Monocytes": {
    "contexts": [
@@ -153,7 +149,7 @@
     "Ulcerative colitis",
     "White count"
    ],
-   "n_perturbations": 181
+   "n_perturbations": 195
   },
   "PerturbAI": {
    "contexts": [
@@ -250,15 +246,15 @@
  "totals": {
   "datasets": 7,
   "traits": 39,
-  "perturbations": 10223,
-  "pairs": 39142,
-  "meta_program_rows": 3971637,
+  "perturbations": 10260,
+  "pairs": 39119,
+  "meta_program_rows": 3896837,
   "umap_points": 38791
  },
  "files": {
-  "meta_programs.parquet": 9426166,
-  "pathways.parquet": 3457595,
-  "umap.parquet": 672457,
+  "meta_programs.parquet": 9291032,
+  "pathways.parquet": 3397318,
+  "umap.parquet": 673249,
   "genes.parquet": 143403
  }
 }

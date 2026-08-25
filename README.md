@@ -66,8 +66,8 @@ files in `processed_data` and the precomputed UMAP coordinates in `umaps`:
 
 | File | Rows | Size |
 |---|---:|---:|
-| `pathways.parquet` | 39,142 | 3.5 MB |
-| `meta_programs.parquet` | 3,971,637 | 9.4 MB |
+| `pathways.parquet` | 39,119 | 3.4 MB |
+| `meta_programs.parquet` | 3,896,837 | 9.3 MB |
 | `umap.parquet` | 38,791 | 0.7 MB |
 | `genes.parquet` | 15,066 | 0.1 MB |
 

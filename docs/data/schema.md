@@ -8,8 +8,8 @@ directly without the browser.
 
 | File | Rows | Size | Contents |
 |---|---:|---:|---|
-| [`pathways.parquet`](tables/pathways.parquet) | 39,142 | 3.5 MB | One row per scored pair: TRS, p-value, enriched pathways |
-| [`meta_programs.parquet`](tables/meta_programs.parquet) | 3,971,637 | 9.4 MB | Top 100 ranked meta-program genes per pair |
+| [`pathways.parquet`](tables/pathways.parquet) | 39,119 | 3.4 MB | One row per scored pair: TRS, p-value, enriched pathways |
+| [`meta_programs.parquet`](tables/meta_programs.parquet) | 3,896,837 | 9.3 MB | Top 100 ranked meta-program genes per pair |
 | [`umap.parquet`](tables/umap.parquet) | 38,791 | 0.7 MB | Precomputed UMAP coordinates per pair |
 | [`genes.parquet`](tables/genes.parquet) | 15,066 | 0.1 MB | Gene symbol to HGNC id, for deep-linking |
 | [`manifest.json`](tables/manifest.json) | | small | Dataset, context, and trait inventory |
@@ -46,7 +46,7 @@ empty. See [context values](datasets.md#context-values).
 | `pathways` | string | Semicolon-delimited enriched pathway names, most significant first. **Null when the meta-program enriched nothing** |
 | `neglog10p_pathways` | string | Semicolon-delimited `-log10(p)`, parallel to `pathways`; null alongside it |
 
-Just under half the rows — 19,082 of 39,142 — have no enriched pathways. The
+Almost exactly half the rows — 19,473 of 39,119 — have no enriched pathways. The
 source writes a literal `NA` there; the build converts it to null, so a check for
 absence works normally rather than matching a magic string.
 
@@ -93,8 +93,11 @@ Coordinates are precomputed per dataset and trait, so a UMAP is only meaningful
 within one dataset-trait selection. Coordinates from different traits are not
 comparable to each other.
 
-Not every trait has coordinates. 709 UMAP points also have no matching row in
-`pathways.parquet` — the explorer draws these muted and offers no drill-down.
+Every trait has coordinates, and every UMAP point has a matching results row.
+
+The reverse does not quite hold: 328 results rows have no UMAP point. 34 of
+those are the `Control` baseline, which has no position by construction; the
+other 294 are all non-significant, with TRS 0 and p-value 0.5.
 
 ## `genes.parquet`
 
