@@ -28,7 +28,7 @@ disease's <strong>heritability</strong> those programs explain.
 
 <div class="ps-metrics" markdown>
 <div class="ps-metric"><span class="ps-metric-value">7</span><span class="ps-metric-label">Datasets</span></div>
-<div class="ps-metric"><span class="ps-metric-value">10,257</span><span class="ps-metric-label">Perturbations</span></div>
+<div class="ps-metric"><span class="ps-metric-value">10,255</span><span class="ps-metric-label">Perturbations</span></div>
 <div class="ps-metric"><span class="ps-metric-value">39</span><span class="ps-metric-label">Traits</span></div>
 <div class="ps-metric"><span class="ps-metric-value">38,791</span><span class="ps-metric-label">Scored pairs</span></div>
 </div>

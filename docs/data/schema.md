@@ -40,7 +40,7 @@ empty. See [context values](datasets.md#context-values).
 |---|---|---|
 | `dataset` | string | One of the seven [datasets](datasets.md) |
 | `context` | string | Subdivision within the dataset |
-| `perturbation` | string | Perturbed gene, or `All` for the [pooled](../docs/configuration.md#analysis-modes) run |
+| `perturbation` | string | Perturbed gene, or one of the two [aggregate runs](guide.md#all-and-pooled-are-not-perturbations), `All` and `Pooled`, which are not perturbations |
 | `trait` | string | GWAS trait |
 | `trs` | double | Trait Relevance Score, **zeroed unless positive and p <= 0.05** |
 | `pvalue` | double | One-sided p-value from the 200-block jackknife |

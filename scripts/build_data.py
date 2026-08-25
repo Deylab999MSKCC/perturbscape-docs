@@ -52,6 +52,11 @@ import pyarrow as pa
 import pyarrow.csv as pcsv
 import pyarrow.parquet as pq
 
+# Not perturbations. Both are aggregate runs scored the same way as one:
+#   Pooled - programs learned from all cells together, then one meta-program
+#   All    - programs learned per perturbation, then combined into one
+AGGREGATES = ("All", "Pooled")
+
 STRATUM_COLUMNS = ("data", "subclass", "cell")
 MP_SUFFIX = "_perturbation_trait_meta_programs.txt"
 PW_SUFFIX = "_perturbation_trait_pathways.txt"
@@ -335,11 +340,15 @@ def write_manifest(meta, paths, umap, out_dir, sizes):
     umap_keys = key_set(umap, ("dataset", "context", "trait"))
 
     grouped = collections.defaultdict(
-        lambda: {"contexts": set(), "traits": set(), "perturbations": set()})
+        lambda: {"contexts": set(), "traits": set(),
+                 "perturbations": set(), "aggregates": set()})
     for d, c, t, p in zip(ds_col, ctx_col, tr_col, pt_col):
         grouped[d]["contexts"].add(c)
         grouped[d]["traits"].add(t)
-        grouped[d]["perturbations"].add(p)
+        if p in AGGREGATES:
+            grouped[d]["aggregates"].add(p)
+        else:
+            grouped[d]["perturbations"].add(p)
 
     datasets = {}
     for name, v in grouped.items():
@@ -353,17 +362,25 @@ def write_manifest(meta, paths, umap, out_dir, sizes):
             "traits": sorted(v["traits"]),
             "umap_traits": umap_traits,
             "n_perturbations": len(v["perturbations"]),
+            "aggregates": sorted(v["aggregates"]),
         }
 
     manifest = {
         "score_name": "TRS",
         "score_long_name": "Trait Relevance Score",
+        "aggregates": {
+            "All": "Programs learned per perturbation, then combined into a "
+                   "single meta-program and scored.",
+            "Pooled": "Programs learned from all cells together, then a single "
+                      "meta-program built from them and scored.",
+        },
         "datasets": datasets,
         "all_traits": sorted(set(tr_col)),
         "totals": {
             "datasets": len(datasets),
             "traits": len(set(tr_col)),
-            "perturbations": len(set(pt_col)),
+            "perturbations": len({p for p in pt_col if p not in AGGREGATES}),
+            "aggregate_pairs": sum(1 for p in pt_col if p in AGGREGATES),
             "pairs": paths.num_rows,
             "meta_program_rows": meta.num_rows,
             "umap_points": umap.num_rows,

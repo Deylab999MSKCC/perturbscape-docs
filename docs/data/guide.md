@@ -5,7 +5,7 @@ edges of the data are.
 
 <div class="ps-metrics" markdown>
 <div class="ps-metric"><span class="ps-metric-value">7</span><span class="ps-metric-label">Datasets</span></div>
-<div class="ps-metric"><span class="ps-metric-value">10,257</span><span class="ps-metric-label">Perturbations</span></div>
+<div class="ps-metric"><span class="ps-metric-value">10,255</span><span class="ps-metric-label">Perturbations</span></div>
 <div class="ps-metric"><span class="ps-metric-value">39</span><span class="ps-metric-label">Traits</span></div>
 <div class="ps-metric"><span class="ps-metric-value">38,791</span><span class="ps-metric-label">Pairs</span></div>
 <div class="ps-metric"><span class="ps-metric-value">3.9M</span><span class="ps-metric-label">Gene ranks</span></div>
@@ -48,6 +48,30 @@ is drawn slightly larger as well as brighter.
 UMAP coordinates are computed **per dataset and trait**. Positions are
 meaningful only within a single plot — a point at the same coordinates in two
 different UMAPs means nothing, and distances are not comparable between plots.
+
+## All and Pooled are not perturbations
+
+Two entries appear alongside the perturbations in every dataset and are scored
+the same way, but neither is a perturbation. Both are **aggregate runs** — a
+single meta-program summarising a whole screen — and they are excluded from
+every perturbation count on this site.
+
+| Entry | What it is |
+|---|---|
+| **Pooled** | Programs were learned from **all cells together**, then a single meta-program was built from them and scored. |
+| **All** | Programs were learned **per perturbation**, then all of those programs were combined into a single meta-program and scored. |
+
+The difference is where the pooling happens: `Pooled` pools the cells before
+learning programs, `All` learns programs per perturbation and pools the programs
+afterwards.
+
+Every dataset and context has an `All` run. All except K562-GWPS and PerturbAI
+also have a `Pooled` run — 186 aggregate rows in total.
+
+They are useful as a reference point: a perturbation scoring near its dataset's
+aggregate is not carrying signal the screen as a whole lacks. In the portal they
+carry an **aggregate** badge in the table and detail panel, are ringed on the
+plot, and are counted separately in the summary line.
 
 ## Using the explorer
 
@@ -111,15 +135,15 @@ a position, a TRS, a p-value and a ranked gene list, and every plotted point has
 all of them. There are 38,791 pairs in each of the three tables, with nothing in
 one that is missing from another.
 
-| Dataset | Contexts | Traits | Perturbations |
-|---|---:|---:|---:|
-| HepG2 | 1 | 10 | 257 |
-| Jurkat | 1 | 19 | 186 |
-| K562-GWPS | 1 | 2 | 7,992 |
-| Monocytes | 2 | 23 | 195 |
-| PerturbAI | 4 | 1 | 1,856 |
-| T2D | 6 | 2 | 35 |
-| TeloHAEC | 1 | 3 | 579 |
+| Dataset | Contexts | Traits | Perturbations | Aggregate runs |
+|---|---:|---:|---:|---|
+| HepG2 | 1 | 10 | 255 | All, Pooled |
+| Jurkat | 1 | 19 | 184 | All, Pooled |
+| K562-GWPS | 1 | 2 | 7,991 | All |
+| Monocytes | 2 | 23 | 193 | All, Pooled |
+| PerturbAI | 4 | 1 | 1,855 | All |
+| T2D | 6 | 2 | 33 | All, Pooled |
+| TeloHAEC | 1 | 3 | 577 | All, Pooled |
 
 One gap is real and expected: **19,296 of 38,791 pairs — almost exactly half —
 have no enriched pathways.** They have a TRS and a p-value, but the meta-program

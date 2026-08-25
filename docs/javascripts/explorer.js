@@ -22,6 +22,11 @@
   const ZOOM_STEP = 1.08;
   const FOCUS_ZOOM = 2.2;
   const GENE_PREVIEW = 10;
+  // Not perturbations: aggregate runs scored the same way as one. Kept in the
+  // data because they are the natural baseline to read a perturbation against,
+  // but never counted as perturbations.
+  const AGGREGATES = { All: 1, Pooled: 1 };
+  const isAggregate = (name) => Object.prototype.hasOwnProperty.call(AGGREGATES, name);
   // Deep-link by stable HGNC id where we resolved one. Symbol-based links break
   // for genes HGNC has since renamed - NCL now reports under NUCLEOLIN - so the
   // symbol form is only a fallback for the handful with no id.
@@ -277,9 +282,11 @@
       ui.legendMax.textContent = maxTRS ? maxTRS.toFixed(2) : "";
 
       const nSig = points.filter((p) => p.pvalue != null && p.pvalue <= 0.05).length;
+      const nAgg = points.filter((p) => isAggregate(p.perturbation)).length;
       ui.summary.innerHTML =
-        `<b>${points.length.toLocaleString()}</b> perturbations · ` +
-        `<b>${nSig.toLocaleString()}</b> significant`;
+        `<b>${(points.length - nAgg).toLocaleString()}</b> perturbations` +
+        (nAgg ? ` · <b>${nAgg}</b> aggregate run${nAgg === 1 ? "" : "s"}` : "") +
+        ` · <b>${nSig.toLocaleString()}</b> significant`;
 
       computeBounds();
       resetTransform();
@@ -342,11 +349,21 @@
         const match = term && p.perturbation.toLowerCase().includes(term);
         // size reinforces the colour, so a scored point is legible at a glance
         const pr = (p.trs || 0) > 0 ? r * 1.4 : r;
+        const rad = match ? pr * 1.6 : pr;
         g.beginPath();
-        g.arc(s.x, s.y, match ? pr * 1.6 : pr, 0, Math.PI * 2);
+        g.arc(s.x, s.y, rad, 0, Math.PI * 2);
         g.fillStyle = colourFor(p, maxTRS, pal);
         g.globalAlpha = term && !match ? 0.15 : 1;
         g.fill();
+        // aggregates are not perturbations, so they get a ring rather than
+        // sitting anonymously among the points they summarise
+        if (isAggregate(p.perturbation)) {
+          g.lineWidth = 1.4;
+          g.strokeStyle = pal.ring;
+          g.beginPath();
+          g.arc(s.x, s.y, rad + 2.6, 0, Math.PI * 2);
+          g.stroke();
+        }
         if (match) {
           g.globalAlpha = 1;
           g.lineWidth = 1.2;
@@ -412,8 +429,14 @@
         <div class="ps-x-detail-head">
           <span class="ps-x-detail-eyebrow">${esc(ui.ds.value)}${
             ui.ctx.value !== ui.ds.value ? " · " + esc(ui.ctx.value) : ""}</span>
-          <h3>${esc(p.perturbation)}</h3>
+          <h3>${esc(p.perturbation)}${isAggregate(p.perturbation)
+            ? '<span class="ps-x-agg">aggregate</span>' : ""}</h3>
           <p class="ps-x-detail-trait">${esc(ui.trait.value)}</p>
+          ${isAggregate(p.perturbation)
+            ? `<p class="ps-x-agg-note">${p.perturbation === "Pooled"
+                ? "Not a perturbation. Programs were learned from all cells together, then a single meta-program was built from them and scored."
+                : "Not a perturbation. Programs were learned per perturbation, then all of them were combined into a single meta-program and scored."}</p>`
+            : ""}
           <dl class="ps-x-stats">
             <div><dt>TRS</dt><dd class="${sig ? "ps-x-sig" : "ps-x-nsig"}">${fmtTRS(p.trs)}</dd></div>
             <div><dt>P</dt><dd class="${sig ? "ps-x-sig" : "ps-x-nsig"}">${fmtP(p.pvalue)}</dd></div>
@@ -556,7 +579,8 @@
           : esc(name.slice(0, at)) + "<mark>" + esc(name.slice(at, at + term.length)) +
             "</mark>" + esc(name.slice(at + term.length));
         return `<li role="option" data-i="${i}" aria-selected="false">
-          <span class="ps-x-suggest-name">${marked}</span>
+          <span class="ps-x-suggest-name">${marked}${
+            isAggregate(name) ? '<span class="ps-x-agg">aggregate</span>' : ""}</span>
           <span class="ps-x-suggest-trs ${sig ? "ps-x-sig" : "ps-x-nsig"}">${
             fmtTRS(p.trs)}</span></li>`;
       }).join("");
@@ -646,7 +670,8 @@
           const pw = (pwMap[p.perturbation] || "").split(";")
             .slice(0, 3).map((s) => s.trim()).filter(Boolean).join(" · ");
           return `<tr data-idx="${i}">
-            <td class="ps-x-mono"><b>${esc(p.perturbation)}</b></td>
+            <td class="ps-x-mono"><b>${esc(p.perturbation)}</b>${
+              isAggregate(p.perturbation) ? '<span class="ps-x-agg">aggregate</span>' : ""}</td>
             <td class="ps-x-num ${sig ? "ps-x-sig" : "ps-x-nsig"}">${fmtTRS(p.trs)}</td>
             <td class="ps-x-num ${sig ? "ps-x-sig" : "ps-x-nsig"}">${fmtP(p.pvalue)}</td>
             <td><div class="ps-x-trunc">${pw ? esc(pw) : "—"}</div></td>

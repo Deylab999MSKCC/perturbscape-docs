@@ -15,7 +15,7 @@ trait list differs substantially between them.
 <p class="ps-ds-sub">Hepatocellular carcinoma line</p>
 Liver-derived cells, scored against circulating liver-function and lipid
 biomarkers.
-<dl><dt>Perturbations</dt><dd>257</dd><dt>Traits</dt><dd>10</dd><dt>Contexts</dt><dd>1</dd></dl>
+<dl><dt>Perturbations</dt><dd>255</dd><dt>Traits</dt><dd>10</dd><dt>Contexts</dt><dd>1</dd></dl>
 </div>
 
 <div class="ps-ds" markdown>
@@ -23,7 +23,7 @@ biomarkers.
 <p class="ps-ds-sub">T lymphocyte leukemia line</p>
 T-cell system scored against a broad panel of autoimmune conditions and blood
 cell indices.
-<dl><dt>Perturbations</dt><dd>186</dd><dt>Traits</dt><dd>19</dd><dt>Contexts</dt><dd>1</dd></dl>
+<dl><dt>Perturbations</dt><dd>184</dd><dt>Traits</dt><dd>19</dd><dt>Contexts</dt><dd>1</dd></dl>
 </div>
 
 <div class="ps-ds" markdown>
@@ -31,7 +31,7 @@ cell indices.
 <p class="ps-ds-sub">Genome-wide Perturb-seq</p>
 By far the largest screen here, covering most expressed genes, scored against
 erythroid indices.
-<dl><dt>Perturbations</dt><dd>7,992</dd><dt>Traits</dt><dd>2</dd><dt>Contexts</dt><dd>1</dd></dl>
+<dl><dt>Perturbations</dt><dd>7,991</dd><dt>Traits</dt><dd>2</dd><dt>Contexts</dt><dd>1</dd></dl>
 </div>
 
 <div class="ps-ds" markdown>
@@ -39,14 +39,14 @@ erythroid indices.
 <p class="ps-ds-sub">Knockdown and knockout</p>
 The only dataset with two perturbation modalities, analyzed and plotted
 separately.
-<dl><dt>Perturbations</dt><dd>195</dd><dt>Traits</dt><dd>23</dd><dt>Contexts</dt><dd>2</dd></dl>
+<dl><dt>Perturbations</dt><dd>193</dd><dt>Traits</dt><dd>23</dd><dt>Contexts</dt><dd>2</dd></dl>
 </div>
 
 <div class="ps-ds" markdown>
 ### PerturbAI
 <p class="ps-ds-sub">Brain, four neuronal subclasses</p>
 Scored against autism, with results reported separately per neuronal subclass.
-<dl><dt>Perturbations</dt><dd>1,856</dd><dt>Traits</dt><dd>1</dd><dt>Contexts</dt><dd>4</dd></dl>
+<dl><dt>Perturbations</dt><dd>1,855</dd><dt>Traits</dt><dd>1</dd><dt>Contexts</dt><dd>4</dd></dl>
 </div>
 
 <div class="ps-ds" markdown>
@@ -54,14 +54,14 @@ Scored against autism, with results reported separately per neuronal subclass.
 <p class="ps-ds-sub">Pancreatic islet differentiation</p>
 Islet-directed differentiation sampled across stages, scored against glycemic
 traits.
-<dl><dt>Perturbations</dt><dd>35</dd><dt>Traits</dt><dd>2</dd><dt>Contexts</dt><dd>6</dd></dl>
+<dl><dt>Perturbations</dt><dd>33</dd><dt>Traits</dt><dd>2</dd><dt>Contexts</dt><dd>6</dd></dl>
 </div>
 
 <div class="ps-ds" markdown>
 ### TeloHAEC
 <p class="ps-ds-sub">Aortic endothelial cells</p>
 Telomerase-immortalized endothelium, scored against cardiovascular traits.
-<dl><dt>Perturbations</dt><dd>579</dd><dt>Traits</dt><dd>3</dd><dt>Contexts</dt><dd>1</dd></dl>
+<dl><dt>Perturbations</dt><dd>577</dd><dt>Traits</dt><dd>3</dd><dt>Contexts</dt><dd>1</dd></dl>
 </div>
 
 </div>
@@ -129,6 +129,14 @@ those.
 Each context is scored and plotted independently: selecting Monocytes KD gives a
 different UMAP from Monocytes KO, and each T2D stage has its own.
 
+## Aggregate runs
+
+Every dataset also carries one or two entries that are **not** perturbations:
+`All` and, in all but K562-GWPS and PerturbAI, `Pooled`. They are aggregate
+meta-programs summarising a whole screen and are excluded from the perturbation
+counts above. See
+[All and Pooled are not perturbations](guide.md#all-and-pooled-are-not-perturbations).
+
 ## Notes on trait naming
 
 Trait names come from the GWAS panel used for each dataset and are kept as they
@@ -146,8 +154,8 @@ TRS is standardized by total trait heritability, so values are comparable across
 annotations and across traits. Comparisons **across datasets** still warrant
 care:
 
-- Screens differ enormously in size. K562-GWPS tests 7,992 perturbations against
-  2 traits; T2D tests 35 against 2. Multiple-testing burden is not comparable.
+- Screens differ enormously in size. K562-GWPS tests 7,991 perturbations against
+  2 traits; T2D tests 33 against 2. Multiple-testing burden is not comparable.
 - The variant-to-gene links used in
   [annotation](../docs/methods/disease-enrichment.md#step-3-variant-annotation)
   are restricted by tissue, so the SNP universe reachable by a program differs

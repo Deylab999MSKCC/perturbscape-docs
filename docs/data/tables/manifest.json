@@ -1,6 +1,10 @@
 {
  "score_name": "TRS",
  "score_long_name": "Trait Relevance Score",
+ "aggregates": {
+  "All": "Programs learned per perturbation, then combined into a single meta-program and scored.",
+  "Pooled": "Programs learned from all cells together, then a single meta-program built from them and scored."
+ },
  "datasets": {
   "HepG2": {
    "contexts": [
@@ -30,7 +34,11 @@
     "Total bilirubin",
     "Triglycerides"
    ],
-   "n_perturbations": 257
+   "n_perturbations": 255,
+   "aggregates": [
+    "All",
+    "Pooled"
+   ]
   },
   "Jurkat": {
    "contexts": [
@@ -78,7 +86,11 @@
     "Ulcerative colitis",
     "White count"
    ],
-   "n_perturbations": 186
+   "n_perturbations": 184,
+   "aggregates": [
+    "All",
+    "Pooled"
+   ]
   },
   "K562-GWPS": {
    "contexts": [
@@ -92,7 +104,10 @@
     "Mean corpuscular hemoglobin",
     "Red blood cell count"
    ],
-   "n_perturbations": 7992
+   "n_perturbations": 7991,
+   "aggregates": [
+    "All"
+   ]
   },
   "Monocytes": {
    "contexts": [
@@ -149,7 +164,11 @@
     "Ulcerative colitis",
     "White count"
    ],
-   "n_perturbations": 195
+   "n_perturbations": 193,
+   "aggregates": [
+    "All",
+    "Pooled"
+   ]
   },
   "PerturbAI": {
    "contexts": [
@@ -164,7 +183,10 @@
    "umap_traits": [
     "Autism"
    ],
-   "n_perturbations": 1856
+   "n_perturbations": 1855,
+   "aggregates": [
+    "All"
+   ]
   },
   "T2D": {
    "contexts": [
@@ -183,7 +205,11 @@
     "HbA1C",
     "Type 2 diabetes"
    ],
-   "n_perturbations": 35
+   "n_perturbations": 33,
+   "aggregates": [
+    "All",
+    "Pooled"
+   ]
   },
   "TeloHAEC": {
    "contexts": [
@@ -199,7 +225,11 @@
     "Diastolic blood pressure",
     "Systolic blood pressure"
    ],
-   "n_perturbations": 579
+   "n_perturbations": 577,
+   "aggregates": [
+    "All",
+    "Pooled"
+   ]
   }
  },
  "all_traits": [
@@ -246,7 +276,8 @@
  "totals": {
   "datasets": 7,
   "traits": 39,
-  "perturbations": 10257,
+  "perturbations": 10255,
+  "aggregate_pairs": 186,
   "pairs": 38791,
   "meta_program_rows": 3878490,
   "umap_points": 38791

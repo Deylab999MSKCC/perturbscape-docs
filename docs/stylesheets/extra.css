@@ -1120,3 +1120,27 @@ body.ps-wide .md-content { min-width: 0; }
   border-color: var(--ps-accent);
   color: var(--ps-accent);
 }
+
+/* aggregate runs (All / Pooled) are not perturbations */
+.ps-x-agg {
+  display: inline-block;
+  margin-left: .35rem;
+  padding: 0 .32rem;
+  font-family: var(--md-code-font-family, monospace);
+  font-size: .48rem;
+  font-weight: 600;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  vertical-align: middle;
+  color: var(--ps-accent);
+  border: 1px solid var(--ps-accent-dim);
+  border-radius: 2px;
+  background: var(--ps-accent-glow);
+}
+.md-typeset .ps-x-detail-head h3 .ps-x-agg { font-size: .5rem; }
+.ps-x-agg-note {
+  margin: .5rem 0 0;
+  font-size: .62rem;
+  line-height: 1.5;
+  color: var(--ps-muted);
+}
