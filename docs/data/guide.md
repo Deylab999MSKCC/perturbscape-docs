@@ -120,16 +120,23 @@ results are still included in **Download all** and in the bulk tables.
 | T2D | 6 | 2 | 2 | 35 |
 | TeloHAEC | 1 | 3 | 3 | 580 |
 
-Of 39,142 scored pairs, 147 have no meta-program genes recorded.
+Three different kinds of gap exist in the data, and the portal distinguishes
+them rather than lumping them together.
 
-A further 709 UMAP points have no row in the results table at all. These are not
-perturbations whose meta-program failed to enrich — every row that exists in the
-results carries pathways. They are perturbations present in the UMAP
-coordinates but absent from the results table entirely, concentrated in the
-monocyte screens and dominated by HLA genes, readthrough transcripts and
+**No enriched pathways.** 19,082 of 39,142 scored pairs — just under half — have
+a TRS and a p-value but no enriched pathways at all: the meta-program simply did
+not reach significance for any pathway. The detail panel says so, and the
+table's pathway column shows a dash.
+
+**No meta-program genes.** 147 pairs have no ranked genes recorded.
+
+**No results row.** 709 UMAP points have no entry in the results table under any
+trait, so they have no TRS, p-value, genes or pathways. These are concentrated
+in the monocyte screens and dominated by HLA genes, readthrough transcripts and
 antisense RNAs, which suggests they were filtered out when the results were
-assembled. They are plotted using the score their UMAP file carries, and
-selecting one says plainly that no enrichment result is available for it.
+assembled but left in the UMAP coordinates. They are plotted using the score
+their UMAP file carries, and selecting one says that no enrichment result is
+available.
 
 See [Datasets](datasets.md) for what each system is and what the context values
 mean.

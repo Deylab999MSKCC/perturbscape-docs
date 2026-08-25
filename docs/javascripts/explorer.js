@@ -496,7 +496,8 @@
 
     function pathwayPanel(row) {
       if (!row || !row.pathways)
-        return '<span class="ps-x-nsig">No enriched pathways.</span>';
+        return '<span class="ps-x-nsig">This meta-program produced no enriched '
+             + 'pathways.</span>';
       const names = row.pathways.split(";").map((s) => s.trim()).filter(Boolean);
       const vals = (row.neglog10p_pathways || "").split(";")
         .map((s) => parseFloat(s.trim()));

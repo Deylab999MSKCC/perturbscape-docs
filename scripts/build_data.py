@@ -129,6 +129,18 @@ def read_tsv(path):
     return pcsv.read_csv(path, parse_options=pcsv.ParseOptions(delimiter="\t"))
 
 
+def null_if_na(column):
+    """The source writes a literal 'NA' where a meta-program enriched nothing.
+
+    Left as text it renders as a pathway called "NA"; as null it is simply
+    absent, which is what it means.
+    """
+    values = column.cast(pa.string()).to_pylist()
+    cleaned = [None if v is None or v.strip() in ("NA", "NaN", "") else v
+               for v in values]
+    return pa.array(cleaned, pa.string())
+
+
 def context_column(table, dataset):
     """The stratum column as strings, or the dataset name when absent."""
     stratum = next((c for c in STRATUM_COLUMNS if c in table.column_names), None)
@@ -212,11 +224,14 @@ def build_pathways(source, trait_map):
             "trait": t["trait"].cast(pa.string()),
             "trs": t["tau"].cast(pa.float64()),
             "pvalue": t["pvalue_tau"].cast(pa.float64()),
-            "pathways": t["pathways"].cast(pa.string()),
-            "neglog10p_pathways": t["neglog10p_pathways"].cast(pa.string()),
+            "pathways": null_if_na(t["pathways"]),
+            "neglog10p_pathways": null_if_na(t["neglog10p_pathways"]),
         }))
         print(f"  {dataset:<12} {t.num_rows:>9,} rows", file=sys.stderr)
     combined = remap(pa.concat_tables(parts), "trait", trait_map)
+    empty = sum(1 for v in combined["pathways"].to_pylist() if v is None)
+    print(f"  {empty:,} of {combined.num_rows:,} rows have no enriched pathways "
+          f"({empty / max(1, combined.num_rows):.0%})", file=sys.stderr)
     return combined.sort_by([("dataset", "ascending"), ("pvalue", "ascending")])
 
 

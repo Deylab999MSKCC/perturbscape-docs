@@ -43,16 +43,23 @@ empty. See [context values](datasets.md#context-values).
 | `trait` | string | GWAS trait |
 | `trs` | double | Trait Relevance Score, **zeroed unless positive and p <= 0.05** |
 | `pvalue` | double | One-sided p-value from the 200-block jackknife |
-| `pathways` | string | Semicolon-delimited enriched pathway names, most significant first |
-| `neglog10p_pathways` | string | Semicolon-delimited `-log10(p)`, parallel to `pathways` |
+| `pathways` | string | Semicolon-delimited enriched pathway names, most significant first. **Null when the meta-program enriched nothing** |
+| `neglog10p_pathways` | string | Semicolon-delimited `-log10(p)`, parallel to `pathways`; null alongside it |
+
+Just under half the rows — 19,082 of 39,142 — have no enriched pathways. The
+source writes a literal `NA` there; the build converts it to null, so a check for
+absence works normally rather than matching a magic string.
 
 `pathways` and `neglog10p_pathways` are parallel lists and must be split
-together:
+together, guarding for null first:
 
 ```python
-names = row["pathways"].split("; ")
-vals  = [float(x) for x in row["neglog10p_pathways"].split("; ")]
-ranked = list(zip(names, vals))
+if row["pathways"] is None:
+    ranked = []                      # meta-program enriched nothing
+else:
+    names = row["pathways"].split("; ")
+    vals  = [float(x) for x in row["neglog10p_pathways"].split("; ")]
+    ranked = list(zip(names, vals))
 ```
 
 !!! note "`trs` was previously published as `tau`"
@@ -211,7 +218,8 @@ changes are made when building the Parquet:
 `subclass` in PerturbAI, and `cell` in T2D, and is absent from the other four.
 All become `context`; where absent, `context` is set to the dataset name.
 
-**`tau` and `pvalue_tau` are renamed** to `trs` and `pvalue`.
+**`tau` and `pvalue_tau` are renamed** to `trs` and `pvalue`, and the literal
+`NA` used for "no enriched pathways" becomes a proper null.
 
 **Trait names differing only in capitalization are merged** onto their most
 frequent spelling. The current source files are already consistent, so no merges
