@@ -28,9 +28,9 @@ disease's <strong>heritability</strong> those programs explain.
 
 <div class="ps-metrics" markdown>
 <div class="ps-metric"><span class="ps-metric-value">7</span><span class="ps-metric-label">Datasets</span></div>
-<div class="ps-metric"><span class="ps-metric-value">10,260</span><span class="ps-metric-label">Perturbations</span></div>
+<div class="ps-metric"><span class="ps-metric-value">10,257</span><span class="ps-metric-label">Perturbations</span></div>
 <div class="ps-metric"><span class="ps-metric-value">39</span><span class="ps-metric-label">Traits</span></div>
-<div class="ps-metric"><span class="ps-metric-value">39,119</span><span class="ps-metric-label">Scored pairs</span></div>
+<div class="ps-metric"><span class="ps-metric-value">38,791</span><span class="ps-metric-label">Scored pairs</span></div>
 </div>
 
 A Perturb-seq screen tells you what each perturbation does to a cell. It does not
@@ -45,7 +45,7 @@ pair.
 <div class="ps-route" markdown>
 <span class="ps-eyebrow">Data Portal</span>
 ### Explore the results
-Interactive UMAPs of 39,119 perturbation-trait pairs, coloured by TRS. Click any
+Interactive UMAPs of 38,791 perturbation-trait pairs, coloured by TRS. Click any
 point for its meta-program genes and enriched pathways.
 [Browse the data](data/index.md){ .ps-route-go }
 </div>

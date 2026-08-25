@@ -5,9 +5,9 @@ edges of the data are.
 
 <div class="ps-metrics" markdown>
 <div class="ps-metric"><span class="ps-metric-value">7</span><span class="ps-metric-label">Datasets</span></div>
-<div class="ps-metric"><span class="ps-metric-value">10,260</span><span class="ps-metric-label">Perturbations</span></div>
+<div class="ps-metric"><span class="ps-metric-value">10,257</span><span class="ps-metric-label">Perturbations</span></div>
 <div class="ps-metric"><span class="ps-metric-value">39</span><span class="ps-metric-label">Traits</span></div>
-<div class="ps-metric"><span class="ps-metric-value">39,119</span><span class="ps-metric-label">Pairs</span></div>
+<div class="ps-metric"><span class="ps-metric-value">38,791</span><span class="ps-metric-label">Pairs</span></div>
 <div class="ps-metric"><span class="ps-metric-value">3.9M</span><span class="ps-metric-label">Gene ranks</span></div>
 </div>
 
@@ -106,29 +106,31 @@ reads, and can be queried directly from Python or R without the browser.
 
 ## Coverage
 
-Every trait in every dataset has precomputed UMAP coordinates, so anything in
-the results is reachable from the plot.
+The published tables are defined by the UMAP coordinates: every scored pair has
+a position, a TRS, a p-value and a ranked gene list, and every plotted point has
+all of them. There are 38,791 pairs in each of the three tables, with nothing in
+one that is missing from another.
 
 | Dataset | Contexts | Traits | Perturbations |
 |---|---:|---:|---:|
-| HepG2 | 1 | 10 | 258 |
-| Jurkat | 1 | 19 | 187 |
-| K562-GWPS | 1 | 2 | 7,993 |
+| HepG2 | 1 | 10 | 257 |
+| Jurkat | 1 | 19 | 186 |
+| K562-GWPS | 1 | 2 | 7,992 |
 | Monocytes | 2 | 23 | 195 |
-| PerturbAI | 4 | 1 | 1,858 |
+| PerturbAI | 4 | 1 | 1,856 |
 | T2D | 6 | 2 | 35 |
-| TeloHAEC | 1 | 3 | 580 |
+| TeloHAEC | 1 | 3 | 579 |
 
-Two gaps remain, and the portal shows both for what they are.
+One gap is real and expected: **19,296 of 38,791 pairs — almost exactly half —
+have no enriched pathways.** They have a TRS and a p-value, but the meta-program
+did not reach significance for any pathway. The detail panel says so and the
+table's pathway column shows a dash.
 
-**No enriched pathways.** 19,473 of 39,119 scored pairs — almost exactly half —
-have a TRS and a p-value but no enriched pathways: the meta-program did not
-reach significance for any pathway. The detail panel says so, and the table's
-pathway column shows a dash.
-
-**No meta-program genes.** 96 pairs have no ranked genes recorded. Every one of
-them is non-significant — the largest TRS among them is 0 and the smallest
-p-value is 0.5 — so no scored result is affected.
+Pairs the enrichment step did not actually produce a result for are excluded
+rather than published. They were identifiable by a placeholder p-value of
+exactly 0.5 with a TRS of 0, and they never had UMAP coordinates. The `Control`
+baseline is excluded on the same grounds — it is an internal check with no
+perturbation position.
 
 See [Datasets](datasets.md) for what each system is and what the context values
 mean.

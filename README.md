@@ -66,10 +66,10 @@ files in `processed_data` and the precomputed UMAP coordinates in `umaps`:
 
 | File | Rows | Size |
 |---|---:|---:|
-| `pathways.parquet` | 39,119 | 3.4 MB |
-| `meta_programs.parquet` | 3,896,837 | 9.3 MB |
+| `pathways.parquet` | 38,791 | 3.4 MB |
+| `meta_programs.parquet` | 3,878,490 | 9.2 MB |
 | `umap.parquet` | 38,791 | 0.7 MB |
-| `genes.parquet` | 15,066 | 0.1 MB |
+| `genes.parquet` | 15,063 | 0.1 MB |
 
 Roughly 370 MB of source text reduced to under 14 MB, which fits comfortably
 inside GitHub's limits and is served directly from Pages.
@@ -89,7 +89,8 @@ It harmonizes the three schema variants (the leading grouping column is named
 of them) into a single `context` column, renames `tau`/`pvalue_tau` to
 `trs`/`pvalue`, merges trait names that differ only in capitalization, maps the
 UMAP files onto datasets and contexts, resolves gene symbols to stable HGNC ids,
-and writes all four tables plus `manifest.json`. Every merge and rename it
+drops any pair without UMAP coordinates so the keyed tables stay consistent, and
+writes all four tables plus `manifest.json`. Every merge and rename it
 applies is printed, followed by a coverage report.
 
 The HGNC complete set is downloaded once to `.cache/` (gitignored) and reused on

@@ -35,6 +35,11 @@ Source quirks handled here
 * gene symbols are resolved to stable HGNC ids so the portal can deep-link to
   genenames.org. Symbol-based links break for genes HGNC has since renamed
   (NCL is now NUCLEOLIN), so the id is resolved once here instead
+* the UMAP files define what is published: any perturbation-trait pair without
+  coordinates is dropped from the pathways and meta-program tables too. Those
+  pairs are ones the enrichment step did not actually produce a result for -
+  they carry a placeholder `pvalue_tau` of exactly 0.5 with `tau` 0 - plus the
+  `Control` baseline, which has no coordinates by construction
 """
 import argparse
 import collections
@@ -302,6 +307,19 @@ def build_genes(meta, hgnc):
     })
 
 
+def restrict_to(table, keys, label):
+    """Keep only rows whose join key appears in the UMAP coordinates."""
+    cols = [table[c].cast(pa.string()).to_pylist()
+            for c in ("dataset", "context", "perturbation", "trait")]
+    mask = [k in keys for k in zip(*cols)]
+    kept = sum(mask)
+    dropped = len(mask) - kept
+    if dropped:
+        print(f"  {label}: dropped {dropped:,} of {len(mask):,} rows with no "
+              f"UMAP coordinates", file=sys.stderr)
+    return table.filter(pa.array(mask, pa.bool_()))
+
+
 def key_set(table, columns):
     cols = [table[c].cast(pa.string()).to_pylist() for c in columns]
     return set(zip(*cols))
@@ -402,6 +420,13 @@ def main():
     paths = build_pathways(args.source, trait_map)
     print("building umaps...", file=sys.stderr)
     umap = build_umaps(args.umaps, trait_map)
+    # the UMAP files decide what is published; anything without coordinates is
+    # a pair the enrichment step produced no real result for
+    print("restricting to pairs with UMAP coordinates...", file=sys.stderr)
+    umap_keys = key_set(umap, ("dataset", "context", "perturbation", "trait"))
+    paths = restrict_to(paths, umap_keys, "pathways")
+    meta = restrict_to(meta, umap_keys, "meta_programs")
+
     print("building gene index...", file=sys.stderr)
     genes = build_genes(meta, hgnc)
 

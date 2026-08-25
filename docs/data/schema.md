@@ -8,10 +8,10 @@ directly without the browser.
 
 | File | Rows | Size | Contents |
 |---|---:|---:|---|
-| [`pathways.parquet`](tables/pathways.parquet) | 39,119 | 3.4 MB | One row per scored pair: TRS, p-value, enriched pathways |
-| [`meta_programs.parquet`](tables/meta_programs.parquet) | 3,896,837 | 9.3 MB | Top 100 ranked meta-program genes per pair |
+| [`pathways.parquet`](tables/pathways.parquet) | 38,791 | 3.4 MB | One row per scored pair: TRS, p-value, enriched pathways |
+| [`meta_programs.parquet`](tables/meta_programs.parquet) | 3,878,490 | 9.2 MB | Top 100 ranked meta-program genes per pair |
 | [`umap.parquet`](tables/umap.parquet) | 38,791 | 0.7 MB | Precomputed UMAP coordinates per pair |
-| [`genes.parquet`](tables/genes.parquet) | 15,066 | 0.1 MB | Gene symbol to HGNC id, for deep-linking |
+| [`genes.parquet`](tables/genes.parquet) | 15,063 | 0.1 MB | Gene symbol to HGNC id, for deep-linking |
 | [`manifest.json`](tables/manifest.json) | | small | Dataset, context, and trait inventory |
 
 Under 14 MB in total, harmonized from roughly 370 MB of source text.
@@ -21,7 +21,8 @@ The explorer's **Download all** button produces the same content as
 
 ## The join key
 
-`pathways`, `meta_programs` and `umap` share the same four-column key
+`pathways`, `meta_programs` and `umap` share the same four-column key and the
+same 38,791 rows of it, so a join across them never drops or invents a pair
 (`genes` joins on `gene` instead):
 
 ```
@@ -46,7 +47,7 @@ empty. See [context values](datasets.md#context-values).
 | `pathways` | string | Semicolon-delimited enriched pathway names, most significant first. **Null when the meta-program enriched nothing** |
 | `neglog10p_pathways` | string | Semicolon-delimited `-log10(p)`, parallel to `pathways`; null alongside it |
 
-Almost exactly half the rows — 19,473 of 39,119 — have no enriched pathways. The
+Almost exactly half the rows — 19,296 of 38,791 — have no enriched pathways. The
 source writes a literal `NA` there; the build converts it to null, so a check for
 absence works normally rather than matching a magic string.
 
@@ -93,11 +94,14 @@ Coordinates are precomputed per dataset and trait, so a UMAP is only meaningful
 within one dataset-trait selection. Coordinates from different traits are not
 comparable to each other.
 
-Every trait has coordinates, and every UMAP point has a matching results row.
+The UMAP files define what is published. Any perturbation-trait pair without
+coordinates is dropped from `pathways` and `meta_programs` too, so the three
+tables cover exactly the same 38,791 pairs.
 
-The reverse does not quite hold: 328 results rows have no UMAP point. 34 of
-those are the `Control` baseline, which has no position by construction; the
-other 294 are all non-significant, with TRS 0 and p-value 0.5.
+Two things are excluded on that basis. Pairs the enrichment step produced no
+real result for, identifiable upstream by a placeholder p-value of exactly 0.5
+with a TRS of 0; and the `Control` baseline, an internal check with no
+perturbation position.
 
 ## `genes.parquet`
 
@@ -106,11 +110,11 @@ other 294 are all non-significant, with TRS 0 and p-value 0.5.
 | `gene` | string | HGNC symbol, matching `meta_programs.gene` |
 | `hgnc_id` | int32 | Numeric HGNC id, null where the symbol could not be resolved |
 
-Kept separate rather than added as a column on `meta_programs.parquet`: 15,066
+Kept separate rather than added as a column on `meta_programs.parquet`: 15,063
 distinct symbols against 4M rows, so a join table costs a fraction of the space.
 
 Symbols are resolved against the HGNC complete set, matching current symbols
-first and falling back to previous and alias symbols. 15,061 of 15,066 resolve;
+first and falling back to previous and alias symbols. 15,058 of 15,063 resolve;
 the five that do not are readthrough transcripts and `LOC` identifiers that HGNC
 does not carry as genes.
 
@@ -223,6 +227,9 @@ All become `context`; where absent, `context` is set to the dataset name.
 
 **`tau` and `pvalue_tau` are renamed** to `trs` and `pvalue`, and the literal
 `NA` used for "no enriched pathways" becomes a proper null.
+
+**Pairs without UMAP coordinates are dropped**, so the three keyed tables cover
+the same set of pairs.
 
 **Trait names differing only in capitalization are merged** onto their most
 frequent spelling. The current source files are already consistent, so no merges

@@ -15,7 +15,7 @@ trait list differs substantially between them.
 <p class="ps-ds-sub">Hepatocellular carcinoma line</p>
 Liver-derived cells, scored against circulating liver-function and lipid
 biomarkers.
-<dl><dt>Perturbations</dt><dd>258</dd><dt>Traits</dt><dd>10</dd><dt>Contexts</dt><dd>1</dd></dl>
+<dl><dt>Perturbations</dt><dd>257</dd><dt>Traits</dt><dd>10</dd><dt>Contexts</dt><dd>1</dd></dl>
 </div>
 
 <div class="ps-ds" markdown>
@@ -23,7 +23,7 @@ biomarkers.
 <p class="ps-ds-sub">T lymphocyte leukemia line</p>
 T-cell system scored against a broad panel of autoimmune conditions and blood
 cell indices.
-<dl><dt>Perturbations</dt><dd>187</dd><dt>Traits</dt><dd>19</dd><dt>Contexts</dt><dd>1</dd></dl>
+<dl><dt>Perturbations</dt><dd>186</dd><dt>Traits</dt><dd>19</dd><dt>Contexts</dt><dd>1</dd></dl>
 </div>
 
 <div class="ps-ds" markdown>
@@ -31,7 +31,7 @@ cell indices.
 <p class="ps-ds-sub">Genome-wide Perturb-seq</p>
 By far the largest screen here, covering most expressed genes, scored against
 erythroid indices.
-<dl><dt>Perturbations</dt><dd>7,993</dd><dt>Traits</dt><dd>2</dd><dt>Contexts</dt><dd>1</dd></dl>
+<dl><dt>Perturbations</dt><dd>7,992</dd><dt>Traits</dt><dd>2</dd><dt>Contexts</dt><dd>1</dd></dl>
 </div>
 
 <div class="ps-ds" markdown>
@@ -46,7 +46,7 @@ separately.
 ### PerturbAI
 <p class="ps-ds-sub">Brain, four neuronal subclasses</p>
 Scored against autism, with results reported separately per neuronal subclass.
-<dl><dt>Perturbations</dt><dd>1,858</dd><dt>Traits</dt><dd>1</dd><dt>Contexts</dt><dd>4</dd></dl>
+<dl><dt>Perturbations</dt><dd>1,856</dd><dt>Traits</dt><dd>1</dd><dt>Contexts</dt><dd>4</dd></dl>
 </div>
 
 <div class="ps-ds" markdown>
@@ -61,7 +61,7 @@ traits.
 ### TeloHAEC
 <p class="ps-ds-sub">Aortic endothelial cells</p>
 Telomerase-immortalized endothelium, scored against cardiovascular traits.
-<dl><dt>Perturbations</dt><dd>580</dd><dt>Traits</dt><dd>3</dd><dt>Contexts</dt><dd>1</dd></dl>
+<dl><dt>Perturbations</dt><dd>579</dd><dt>Traits</dt><dd>3</dd><dt>Contexts</dt><dd>1</dd></dl>
 </div>
 
 </div>
@@ -146,7 +146,7 @@ TRS is standardized by total trait heritability, so values are comparable across
 annotations and across traits. Comparisons **across datasets** still warrant
 care:
 
-- Screens differ enormously in size. K562-GWPS tests 7,993 perturbations against
+- Screens differ enormously in size. K562-GWPS tests 7,992 perturbations against
   2 traits; T2D tests 35 against 2. Multiple-testing burden is not comparable.
 - The variant-to-gene links used in
   [annotation](../docs/methods/disease-enrichment.md#step-3-variant-annotation)

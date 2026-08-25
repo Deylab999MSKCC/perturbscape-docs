@@ -30,7 +30,7 @@
     "Total bilirubin",
     "Triglycerides"
    ],
-   "n_perturbations": 258
+   "n_perturbations": 257
   },
   "Jurkat": {
    "contexts": [
@@ -78,7 +78,7 @@
     "Ulcerative colitis",
     "White count"
    ],
-   "n_perturbations": 187
+   "n_perturbations": 186
   },
   "K562-GWPS": {
    "contexts": [
@@ -92,7 +92,7 @@
     "Mean corpuscular hemoglobin",
     "Red blood cell count"
    ],
-   "n_perturbations": 7993
+   "n_perturbations": 7992
   },
   "Monocytes": {
    "contexts": [
@@ -164,7 +164,7 @@
    "umap_traits": [
     "Autism"
    ],
-   "n_perturbations": 1858
+   "n_perturbations": 1856
   },
   "T2D": {
    "contexts": [
@@ -199,7 +199,7 @@
     "Diastolic blood pressure",
     "Systolic blood pressure"
    ],
-   "n_perturbations": 580
+   "n_perturbations": 579
   }
  },
  "all_traits": [
@@ -246,15 +246,15 @@
  "totals": {
   "datasets": 7,
   "traits": 39,
-  "perturbations": 10260,
-  "pairs": 39119,
-  "meta_program_rows": 3896837,
+  "perturbations": 10257,
+  "pairs": 38791,
+  "meta_program_rows": 3878490,
   "umap_points": 38791
  },
  "files": {
-  "meta_programs.parquet": 9291032,
-  "pathways.parquet": 3397318,
+  "meta_programs.parquet": 9238873,
+  "pathways.parquet": 3375746,
   "umap.parquet": 673249,
-  "genes.parquet": 143403
+  "genes.parquet": 143383
  }
 }
